@@ -1,0 +1,40 @@
+services:
+  # ─────────────────────────────────────────────
+  # PicoClaw Agent (one-shot query)
+  #   docker compose -f docker/docker-compose.yml run --rm picoclaw-agent -m "Hello"
+  # ─────────────────────────────────────────────
+  picoclaw-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: docker.io/sipeed/picoclaw:latest
+    container_name: picoclaw-agent
+    profiles:
+      - agent
+    # Uncomment to access host network; leave commented unless needed.
+    #extra_hosts:
+    #  - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/root/.picoclaw
+    entrypoint: ["ai-bot", "agent"]
+    stdin_open: true
+    tty: true
+
+  # ─────────────────────────────────────────────
+  # PicoClaw Gateway (Long-running Bot)
+  #   docker compose -f docker/docker-compose.yml --profile gateway up
+  # ─────────────────────────────────────────────
+  picoclaw-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: docker.io/sipeed/picoclaw:latest
+    container_name: picoclaw-gateway
+    restart: unless-stopped
+    profiles:
+      - gateway
+    # Uncomment to access host network; leave commented unless needed.
+    #extra_hosts:
+    #  - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/root/.picoclaw

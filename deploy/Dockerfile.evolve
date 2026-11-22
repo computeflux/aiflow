@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+# evolve-driver（S1 进化执行链编排，docs/plan/S1-进化闭环.md §3.8）
+#
+# 与 Dockerfile.go 的差异：需要 git（worktree add / 分支管理）+ node（agent adapter 容器内直接 exec，
+# 如 ocr CLI 依赖 node），故用 debian-slim 运行层。仓库卷挂 /repo（可写），宿主 home 挂 /host（agent CLI 工具链）。
+#
+# 同时构建三个 Agent adapter（统一 JSON 协议，internal/agentcli）：
+#   agent-pi（coder，调 pi-web HTTP API）/ agent-ocr（reviewer，调宿主 ocr CLI）
+#   agent-analyst（analyst，复用 pi-web 做需求分析/拆卡，只读工具）
+# 2026-10-17：adapter 由 bash+python3 改为 Go 二进制（shell 流式读脚本熔断热修、内联 JSON 解析丢字段）。
+FROM golang:1.26 AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app ./cmd/evolve-driver \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent-pi ./cmd/agent-pi \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent-ocr ./cmd/agent-ocr \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent-analyst ./cmd/agent-analyst
+
+# hc：最小健康检查探针（独立小模块，stdlib only，apps/core/hc 自带 go.mod）
+FROM golang:1.26 AS hcbuilder
+WORKDIR /hc
+COPY hc/go.mod hc/main.go ./
+RUN go build -o /hc/hc .
+
+# 保留 python3：兼容 *.sh adapter（fake 占位 coder 用于「可插拔」DoD 验证）；
+# pi/ocr 生产 adapter 已改 Go（/bin/agent-pi、/bin/agent-ocr），不再依赖 python3。
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates python3 curl xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+# Node 24（与宿主一致；pi CLI 流式 HTTP 客户端在 Node 22 下 "Stream ended without finish_reason"）
+RUN curl -fsSL https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-x64.tar.xz \
+    | tar -xJ -C /usr/local --strip-components=1 \
+    && node --version
+RUN useradd -m -s /bin/bash nonroot
+COPY --from=builder /out/app /bin/app
+COPY --from=builder /out/agent-pi /bin/agent-pi
+COPY --from=builder /out/agent-ocr /bin/agent-ocr
+COPY --from=builder /out/agent-analyst /bin/agent-analyst
+COPY --from=hcbuilder /hc/hc /bin/hc
+USER nonroot
+WORKDIR /home/nonroot
+ENTRYPOINT ["/bin/app"]

@@ -1,0 +1,65 @@
+{
+  "name": "like",
+  "version": "1.0.0",
+  "description": "X 点赞：用本机账号池对指定推文点赞，可多账号多次（like_count）",
+  "owner": "workflow",
+  "runtime": "python",
+  "type": "service",
+  "addr": "http://127.0.0.1:9500",
+  "container": "pyreplay",
+  "image": "pyreplay:latest",
+  "input_schema": {
+    "type": "object",
+    "required": ["post_url"],
+    "properties": {
+      "post_url": {
+        "type": "string",
+        "description": "推文 URL（https://x.com/.../status/<id>）"
+      },
+      "like_count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20,
+        "description": "同一推文用不同账号点赞的次数，默认 1"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["ok"],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "tweet_id": {
+        "type": "string"
+      },
+      "attempts": {
+        "type": "integer"
+      },
+      "success_count": {
+        "type": "integer"
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tweet_id": { "type": "string" },
+            "success": { "type": "boolean" },
+            "error": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "timeout_sec": 180,
+    "rate_per_min": 30,
+    "max_concurrency": 1
+  },
+  "permissions": null
+}

@@ -1,0 +1,12 @@
+# Go 镜像（Dockerfile.go / .evolve / .ci 等，context=仓库根）只需要主模块源码；
+# 排除大块内容，避免每次构建上传数 GB 上下文
+.git/
+cache/
+**/.venv/
+**/node_modules/
+**/__pycache__/
+postiz/
+docs/
+.env
+.env.example
+*.log

@@ -1,0 +1,33 @@
+# Auth（统一权限认证：邮箱 OTP + 社交登录 + JWT RS256 + RBAC；board 登录链路依赖）
+# :8008 对外（浏览器 web3auth SDK 跨源直连，需够到宿主发布端口；auth 侧已开 CORS）
+# JWT 密钥 bind mount（0600，首启生成不落库）——容器重建不丢，但**必须挂载**，
+# 否则每次重启换密钥，所有已签发 token 全部失效（见 Dockerfile.auth 的 root 运行说明）
+services:
+  auth:
+    build:
+      context: ../../../
+      dockerfile: deploy/Dockerfile.auth
+    image: computeflux/auth:latest
+    container_name: auth
+    restart: always
+    env_file: ../../../.env
+    ports:
+      - "8008:8008"
+    networks: [workflow-net]
+    # 根 .env 挂给二进制 godotenv 读取（apps/auth/config，CWD=/app）；
+    # AUTH_* / SMTP_* / MYSQL_* 全在根 .env，无本地 .env 覆盖
+    volumes:
+      - ../../../.env:/app/.env:ro
+      - ../../../apps/auth/auth_jwt.key:/app/auth_jwt.key:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8008"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]

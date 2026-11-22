@@ -1,0 +1,33 @@
+# MySQL 9.2（审批/技能/看板等业务库）
+# 数据卷：bind mount 到仓库 cache/db（原 named volume workflow_mysql-data 已切换；切换前已全量备份 cache/*.sql.gz）
+services:
+  mysql:
+    image: mysql:9.2
+    container_name: workflow-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-workflow123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-workflow}
+      MYSQL_USER: ${MYSQL_USER:-workflow}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-workflow123}
+    ports:
+      - "127.0.0.1:3306:3306"   # 仅本地工具
+    networks: [workflow-net]
+    volumes:
+      - ../../../cache/db:/var/lib/mysql
+      # 客户端默认 utf8mb4（容器 locale=C 时 CLI 默认 latin1 → 手工 SQL 写入中文会双编码损坏）
+      - ../../config/mysql/utf8mb4.cnf:/etc/mysql/conf.d/utf8mb4.cnf:ro
+    # collation 统一 utf8mb4_0900_ai_ci（MySQL 8.0+ 字符集默认）：
+    # 旧值 utf8mb4_unicode_ci 会把「库默认」与 hacks/sql/*.sql 里手写 DDL 的
+    # `DEFAULT CHARSET=utf8mb4`（解析成字符集默认 0900）分裂成两套，
+    # 导致 board_cards.work_item_no ↔ work_items.no 等关联列无法直接 JOIN
+    # （ERROR 1267 Illegal mix of collations，2026-10-30）。
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

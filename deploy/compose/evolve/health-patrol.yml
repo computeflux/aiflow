@@ -1,0 +1,36 @@
+# S5 健康巡检与故障自愈（docs/plan/S5-软件接管与部署编排.md §3.3）：
+# 进程内 10 分钟 ticker（HEALTH_PATROL_INTERVAL_SEC）：
+# 遍历 auto_managed=1 资产 → 健康检查（与 deployctl 同一套定义）→
+# 失败自愈仅限 restart / rebuild+restart / skip（不改配置、不动 schema、不切流量）→
+# interventions（note=self_heal:<action>:<result>）+ 告警；连续 3 轮失败 → 升级，不循环自愈。
+# 与 watchdog 分工：watchdog 管 Temporal activity 死循环，health-patrol 管服务存活，互不重叠。
+# 回滚：docker compose stop health-patrol 即停自愈，退回人工运维模式（§7）。
+# 镜像 deploy/Dockerfile.deploy（Go 二进制 + docker CLI + compose 插件 + shell）。
+# 仅内部网络（:8127 健康探针不发布宿主端口）。
+services:
+  health-patrol:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.deploy
+      args:
+        target: health-patrol
+    image: computeflux/health-patrol:latest
+    container_name: health-patrol
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../../:/work
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8127/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.25
+    labels: ["part-of=compute-flux-workflow"]

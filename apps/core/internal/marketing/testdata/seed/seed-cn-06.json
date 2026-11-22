@@ -1,0 +1,11 @@
+{
+  "id": "seed-cn-06",
+  "region": "cn",
+  "product": "network",
+  "source": "zhihu",
+  "source_ref": "question-16001",
+  "url": "https://zhihu.com/question/16001",
+  "author": "user-016",
+  "excerpt": "海外 API 供应商的客服时差 8 小时，半夜出问题只能干等。有没有提供中文 7x24 技术支持的接入服务？",
+  "found_at": "2026-10-07T11:15:00Z"
+}

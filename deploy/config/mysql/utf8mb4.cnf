@@ -1,0 +1,10 @@
+# MySQL 客户端默认字符集（容器内 mysql/CLI 客户端读 /etc/my.cnf → !includedir /etc/mysql/conf.d/）。
+#
+# 背景（2026-09-30）：镜像内 locale 为 C/POSIX，mysql 客户端默认 latin1（cp1252），
+# 经 `docker compose exec mysql mysql ...` 手工写入的中文会双编码损坏（evolve_tasks 曾中招）。
+# 服务端已由 compose command（--character-set-server=utf8mb4）保证；这里补齐客户端侧。
+[client]
+default-character-set=utf8mb4
+
+[mysql]
+default-character-set=utf8mb4

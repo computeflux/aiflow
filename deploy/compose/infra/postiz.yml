@@ -1,0 +1,105 @@
+# Postiz 全家（开源社媒发布平台，第三方；env 保持第三方约定原样，不纳管）
+# 数据卷沿用原根 compose 的 named volume（workflow_postiz-*），切换不丢数据
+services:
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    container_name: postiz
+    restart: always
+    depends_on:
+      postiz-postgres:
+        condition: service_healthy
+      postiz-redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+    environment:
+      MAIN_URL: 'http://xiaobai.asyou.me:4007'
+      FRONTEND_URL: 'http://xiaobai.asyou.me:4007'
+      NEXT_PUBLIC_BACKEND_URL: 'http://xiaobai.asyou.me:4007/api'
+      NOT_SECURED: 'true'
+      JWT_SECRET: 'computeflux-postiz-jwt-secret-2026'
+      DATABASE_URL: 'postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local'
+      REDIS_URL: 'redis://postiz-redis:6379'
+      BACKEND_INTERNAL_URL: 'http://localhost:3000'
+      TEMPORAL_ADDRESS: "temporal:7233"
+      IS_GENERAL: 'true'
+      DISABLE_REGISTRATION: 'false'
+      RUN_CRON: 'true'
+      STORAGE_PROVIDER: 'local'
+      UPLOAD_DIRECTORY: '/uploads'
+      NEXT_PUBLIC_UPLOAD_DIRECTORY: '/uploads'
+      X_URL: 'http://xiaobai.asyou.me:4007'
+      X_API_KEY: 'iueargVCU7DEkV8PelNZhtk2H'
+      X_API_SECRET: 'EA14L1jgfVrDdNn8nCF5eqdwKq41bjmEquR9PKCA8QIzUD1xYq'
+      OPENAI_API_KEY: ''
+      API_LIMIT: 30
+      FEE_AMOUNT: 0.05
+    volumes:
+      - postiz-config:/config/
+      - postiz-uploads:/uploads/
+    ports:
+      - "127.0.0.1:4007:5000"
+    networks: [workflow-net]
+    # 第三方 hack：twitter 资源固定 IP（k8s 接入时需另行处理）
+    extra_hosts:
+      - "pbs.twimg.com:151.101.196.159"
+      - "abs.twimg.com:151.101.196.159"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://localhost:5000/',res=>process.exit(res.statusCode<500?0:1));r.on('error',()=>process.exit(1));r.setTimeout(4000,()=>{r.destroy();process.exit(1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    mem_limit: 2g
+    cpus: 2.0
+    labels: ["part-of=compute-flux-workflow"]
+
+  postiz-postgres:
+    image: postgres:17-alpine
+    container_name: postiz-postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postiz-password
+      POSTGRES_USER: postiz-user
+      POSTGRES_DB: postiz-db-local
+    networks: [workflow-net]
+    volumes:
+      - postiz-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postiz-user -d postiz-db-local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]
+
+  postiz-redis:
+    image: redis:7.2
+    container_name: postiz-redis
+    restart: always
+    networks: [workflow-net]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - postiz-redis-data:/data
+    mem_limit: 256m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  postiz-postgres-data:
+    name: workflow_postiz-postgres-data
+  postiz-redis-data:
+    name: workflow_postiz-redis-data
+  postiz-config:
+    name: workflow_postiz-config
+  postiz-uploads:
+    name: workflow_postiz-uploads

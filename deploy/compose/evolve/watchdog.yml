@@ -1,0 +1,34 @@
+# S3 干预舱死循环检测（docs/plan/S3-干预舱.md §3.2）：
+# 进程内 1 分钟 ticker（WATCHDOG_INTERVAL_SEC），遍历 agent-prod + default 两 namespace
+# 运行中 workflow 的 history；同一 activity 连续失败 ≥ 10 或 event 数 > 5000
+# → interventions（kind=loop_detect）+ critical 告警（按 workflow_id 去重 open 记录）。
+# 仅内部网络，不发布端口；故障时停本容器即下线，无自动副作用（§6 回滚）。
+services:
+  watchdog:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: watchdog
+    image: computeflux/watchdog:latest
+    container_name: watchdog
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+    # 有 HTTP 端口（health 探针）：TCP 拨号探活（distroless 内 /bin/hc port）
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8125"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]

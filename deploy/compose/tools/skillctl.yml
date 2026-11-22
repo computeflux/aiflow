@@ -1,0 +1,19 @@
+# 一次性工具（profiles: [tools]，默认不启动）
+# 用法：docker compose --profile tools run skillctl list
+# 后续阶段新增工具（agentctl S1 / deployctl、inventory S5）沿用本文件模式，一服务一文件
+services:
+  skillctl:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: skillctl
+    image: computeflux/skillctl:latest
+    container_name: skillctl
+    profiles: ["tools"]
+    environment:
+      WORKFLOW_API_URL: http://workflow-api:8001
+    volumes:
+      - ../../../:/repo:ro
+    networks: [workflow-net]
+    labels: ["part-of=compute-flux-workflow"]

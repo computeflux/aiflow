@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# ComputeFlux ai-flow（PicoClaw fork，apps/ai-flow）— 多阶段镜像（golang:1.25 → distroless）
+#
+# 用法（在 deploy/ 下）：
+#   docker compose up -d --build ai-flow
+# 或手工（构建上下文 = apps/ai-flow，与 Dockerfile.go 的构建上下文约定一致）：
+#   docker build -f deploy/Dockerfile.ai-flow apps/ai-flow
+#
+# 说明：
+# - 构建产物是 cmd/ai-flow 单一入口（gateway / agent / onboard 子命令），
+#   运行入口默认 `gateway`（workflow 侧长驻网关，:8134 仅内部网络）。
+# - 运行时配置：compose 挂载根 .env 到 /app/.env（P1-5，pkg/workflow/config.go
+#   godotenv 读取 WORKFLOW_API_URL / AIFLOW_*），config.json 通过
+#   PICOCLAW_CONFIG 指定（默认 $PICOCLAW_HOME/config.json）。
+# - 健康检查探针 hc 与 Dockerfile.go 同源（apps/core/hc，stdlib only）：
+#   构建上下文在 apps/ai-flow 内没有 hc 源码，这里用同一构建上下文内联一个
+#   等价的最小 TCP 探测（distroless 无 shell/curl/wget，必须静态二进制）。
+
+FROM golang:1.25 AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# generate：上游 embed workspace 依赖（onboard_workspace_embed.go）；直接 go build 入口包。
+RUN CGO_ENABLED=0 go generate ./... \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ai-flow ./cmd/ai-flow
+
+# hc：最小健康检查探针（stdlib only 静态二进制，distroless 内可执行）
+FROM golang:1.25 AS hcbuilder
+WORKDIR /hc
+COPY --from=builder /src/go.mod ./go.mod
+RUN printf 'package main\n\nimport (\n\t"fmt"\n\t"net"\n\t"os"\n\t"time"\n)\n\nfunc main() {\n\tif len(os.Args) < 3 || os.Args[1] != "port" {\n\t\tfmt.Println("usage: hc port <host:port>")\n\t\tos.Exit(2)\n\t}\n\tconn, err := net.DialTimeout("tcp", os.Args[2], 3*time.Second)\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, err)\n\t\tos.Exit(1)\n\t}\n\t_ = conn.Close()\n}\n' > main.go
+RUN go mod init hc >/dev/null 2>&1 || true; CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /hc/hc .
+
+FROM gcr.io/distroless/base
+COPY --from=builder /out/ai-flow /bin/ai-flow
+COPY --from=hcbuilder /hc/hc /bin/hc
+USER nonroot
+ENTRYPOINT ["/bin/ai-flow"]
+CMD ["gateway"]

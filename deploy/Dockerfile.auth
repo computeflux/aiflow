@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+# ComputeFlux auth — 统一权限认证服务（独立 go.mod 模块，不能复用 Dockerfile.go）
+#
+# 用法（在 deploy/ 下）：
+#   docker compose up -d --build auth
+#
+# 构建 context 是仓库根（compose 里 context: ../../../）：
+#   COPY apps/auth/... 后在 /app 内构建 . 模块
+#
+# 注意：最终镜像以 root 运行 —— JWT RS256 私钥（auth_jwt.key，0600）经 bind mount 注入
+# /app/auth_jwt.key，容器 root 在 rootless docker 下对应宿主用户，可读取；
+# nonroot(1000) 读不了 0600 的挂载文件，故不用 USER nonroot。
+FROM golang:1.26 AS builder
+WORKDIR /app
+COPY apps/auth/go.mod apps/auth/go.sum ./
+RUN go mod download
+COPY apps/auth/ ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app .
+
+# hc：最小健康检查探针（独立小模块，stdlib only，apps/core/hc 自带 go.mod）
+FROM golang:1.26 AS hcbuilder
+WORKDIR /hc
+COPY apps/core/hc/go.mod apps/core/hc/main.go ./
+RUN go build -o /hc/hc .
+
+FROM gcr.io/distroless/base
+WORKDIR /app
+COPY --from=builder /out/app /app/app
+COPY --from=hcbuilder /hc/hc /bin/hc
+# godotenv 从 CWD 读 .env（compose 挂载 ../../../.env → /app/.env）；
+# JWT 密钥默认路径 auth_jwt.key 相对 CWD（compose 挂载 → /app/auth_jwt.key）
+ENTRYPOINT ["/app/app"]

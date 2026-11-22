@@ -1,0 +1,23 @@
+# otel-collector 配置：接收 OTLP(grpc 4317 / http 4318)，导出到 Jaeger
+# 由 hacks/otel.sh 以只读方式挂载到容器 /etc/otel/config.yaml
+# 注意：jaeger:latest 是 v2，legacy jaeger thrift(14250) 已不默认启用，
+# 因此用 OTLP 直接发送到 jaeger 的 OTLP 接收器（4317）。
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp/jaeger, debug]

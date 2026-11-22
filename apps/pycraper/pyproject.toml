@@ -1,0 +1,32 @@
+[project]
+name = "pycraper"
+version = "0.1.0"
+description = "MCP scraper worker for ComputeFlux"
+requires-python = ">=3.12"
+dependencies = [
+    "crawl4ai>=0.6,<1.0",
+    "mcp>=1.0,<2.0",
+    "opentelemetry-api>=1.24,<2.0",
+    "opentelemetry-sdk>=1.24,<2.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24,<2.0",
+    "pydantic>=2.0,<3.0",
+    "pymysql>=1.1,<2.0",
+    "python-dotenv>=1.0,<2.0",
+    "requests>=2.31,<3.0",
+    "temporalio>=1.0,<2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.basedpyright]
+extraPaths = ["."]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"

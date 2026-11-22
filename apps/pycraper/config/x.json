@@ -1,0 +1,12 @@
+{
+  "use_scraper": true,
+  "mcp_x_command": "echo",
+  "mcp_x_fetch_tool": "search_tweets",
+  "mcp_x_publish_tool": "post_tweet",
+  "proxy_list": "",
+  "headless": true,
+  "delay_before_return_html": 2.0,
+  "scroll_base_pause_ms": 2000,
+  "scroll_reading_pause_ms": 4000,
+  "base_url": "https://x.com/search"
+}

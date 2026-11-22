@@ -1,0 +1,12 @@
+{
+  "name": "ocr",
+  "role": "reviewer",
+  "version": "1.0.0",
+  "protocol": "cli",
+  "entrypoint": "/bin/agent-ocr",
+  "container": "ocr",
+  "workdir_prefix": "/work",
+  "limits": { "timeout_sec": 4200, "max_files_per_turn": 100 },
+  "permissions": { "write_scope": "none" },
+  "config": { "session_dir": "/root/.ocr" }
+}

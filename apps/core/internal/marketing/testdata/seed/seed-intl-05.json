@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-05",
+  "region": "intl",
+  "product": "network",
+  "source": "reddit",
+  "source_ref": "r/privacy/thread-5001",
+  "url": "https://reddit.com/r/privacy/comments/5001",
+  "author": "user-005",
+  "excerpt": "用公共 RPC 感觉自己的钱包地址全被记录在案了，有没有不追踪客户端 IP 的隐私 RPC 中转？",
+  "found_at": "2026-10-06T19:48:00Z"
+}

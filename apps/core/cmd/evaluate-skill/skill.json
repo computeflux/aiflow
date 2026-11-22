@@ -1,0 +1,64 @@
+{
+  "name": "evaluate",
+  "version": "1.0.0",
+  "description": "CRAG 相关性评估：用 LLM 判断检索到的文档能否回答查询，逐篇打分（0-1）并给出是否充分的总判。",
+  "owner": "workflow",
+  "runtime": "go",
+  "type": "service",
+  "addr": "http://127.0.0.1:9502",
+  "image": "workflow:evaluate-skill",
+  "input_schema": {
+    "type": "object",
+    "required": ["query", "docs"],
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "用户查询"
+      },
+      "docs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "chunk": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "content": { "type": "string" },
+                "source": { "type": "string" },
+                "url": { "type": "string" }
+              }
+            },
+            "score": { "type": "number" }
+          }
+        },
+        "description": "检索到的文档（qdrant SearchResult，含 chunk 内容与相似度）"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["ok"],
+    "properties": {
+      "ok": { "type": "boolean" },
+      "reason": { "type": "string" },
+      "evaluations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "score": { "type": "number" },
+            "reasoning": { "type": "string" }
+          }
+        }
+      },
+      "sufficient": { "type": "boolean" }
+    }
+  },
+  "limits": {
+    "timeout_sec": 120,
+    "rate_per_min": 10,
+    "max_concurrency": 2
+  },
+  "permissions": null
+}

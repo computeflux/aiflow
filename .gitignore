@@ -1,0 +1,93 @@
+.env
+.env.local
+deploy/.env
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+**/node_modules
+
+# 二进制构建产物（编译到项目根目录的可执行文件）
+apps/actives/send_credit
+apps/mailer/workflow-mailer
+apps/metrics/metrics
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+build/
+dist/
+
+.config
+
+# Data
+data/
+
+# pi 凭据（明文密钥，勿提交）
+apps/core/agents/pi/auth.json
+
+# pi 会话数据（含代码/上下文，勿提交）
+apps/core/agents/pi/*.jsonl
+apps/core/agents/pi/sessions/
+
+# 外部可选子项目（各自是独立 git 仓库，不纳主仓库；见 AGENTS.md apps/ 约定）
+# 内部模块（core/core-ui/auth/mailer/ai-bot/pycraper/pyreplay/metrics）由主仓库追踪
+apps/actives/
+apps/c2c/
+apps/contract-deploy/
+apps/dapp/
+apps/game/
+apps/minishop/
+apps/pi-web/
+apps/tee-node/
+apps/tee-node-monitor/
+apps/web3auth/
+
+# S1 进化链运行时产物（evolve worktree / audit 报告）
+cache/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+bin/
+apps/metrics/ssl
+apps/minishop/ossutil_output/
+apps/minishop/.env.development
+apps/c2c/hacks/ssl/
+!apps/c2c/hacks/build/
+apps/c2c/index.html
+
+# go build 产物（go build ./cmd/... 默认输出到模块根 apps/core/）
+apps/core/api
+apps/core/go-worker
+apps/core/evolve-driver
+apps/core/generate-skill
+apps/core/evaluate-skill
+apps/core/search-skill
+apps/core/skillctl
+apps/core/agentctl
+apps/core/audit
+apps/core/sandbox-runner
+apps/core/flex-server
+apps/core/watchdog
+apps/core/matrix-bot
+apps/core/ops-report
+apps/core/knowledge-sync
+apps/core/work-dispatch
+apps/core/inventory
+apps/core/deployctl
+apps/core/health-patrol
+apps/minishop/dist-ssr/
+docs/
+apps/ai-bot/ai-bot

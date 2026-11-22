@@ -1,0 +1,31 @@
+# 构建上下文裁剪（Dockerfile.go / Dockerfile.board 以仓库根为 context）
+.git
+**/.git
+**/node_modules
+**/.venv
+**/__pycache__
+bin/
+logs/
+data/
+**/dist
+**/*.log
+**/*.jsonl
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+agents/pi/auth.json
+apps/c2c/hacks
+apps/minishop/ossutil_output
+apps/metrics/ssl
+# 与本次构建无关的大子项目（board 只需 board+web3auth；Go 镜像只需 cmd/+internal/）
+apps/pi-web
+apps/dapp
+apps/minishop
+apps/tee-node
+apps/contract-deploy
+apps/actives
+apps/metrics
+apps/auth
+apps/game
+**/.next
+**/dist-ssr

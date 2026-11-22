@@ -1,0 +1,27 @@
+# S5 部署编排器（docs/plan/S5-软件接管与部署编排.md §3.2/§3.4）：
+# 统一 compose 驱动的 build/up/健康检查/自愈/回滚 + 版本容器（Engine API）+ auto-update。
+# 镜像 deploy/Dockerfile.deploy（Go 二进制 + docker CLI + compose 插件 + shell）。
+# 用法（deploy/ 下）：
+#   docker compose --profile tools run deployctl deploy all
+#   docker compose --profile tools run deployctl status
+#   docker compose --profile tools run deployctl version up like 1.4.1 --env test
+# ⚠️ /work 可写：auto-update 的 git pull 需要（一次性 alpine/git 容器挂宿主 REPO_HOST_PATH）；
+# deployctl 只经 docker CLI 操作容器，不改仓库文件（除 git pull）。
+services:
+  deployctl:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.deploy
+      args:
+        target: deployctl
+    image: computeflux/deployctl:latest
+    container_name: deployctl
+    profiles: ["tools"]
+    env_file: ../../../.env
+    environment:
+      REPO_HOST_PATH: /home/wetee/work/cathome/workflow
+    networks: [workflow-net]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../../:/work
+    labels: ["part-of=compute-flux-workflow"]

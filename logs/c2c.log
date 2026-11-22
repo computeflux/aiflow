@@ -1,0 +1,527 @@
+2026/09/18 21:19:22.054971 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/18 21:19:22.055390 [JOB 1] WAL file c2c_data/000044.log with log number 000044 stopped reading at offset: 15926; replayed 37 keys in 12 batches
+2026/09/18 21:19:22.064918 [c2c] 使用节点密钥 0x0x44859a…
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/18 21:19:22.092386 [c2c-service] listening on 0.0.0.0:8007 (https)
+[GIN] 2026/09/18 - 21:19:29 | 200 | 92.624µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:19:29 | 200 | 74.202µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:19:29 | 200 |   2.91ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/18 - 21:19:29 | 200 | 888.94µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/18 21:19:33.119747 [warn] [risk-high-freq] high frequency ordering in 24h buyer=0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa orders_24h=41
+[GIN] 2026/09/18 - 21:19:33 | 201 |  26.05ms | 192.168.110.179 | POST     "/c2c/orders"
+[GIN] 2026/09/18 - 21:19:33 | 200 | 273.605µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:19:33 | 200 |    3.2ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/18 21:19:57.055699 http: TLS handshake error from 192.168.110.1:57582: tls: client offered only unsupported versions: [301]
+2026/09/18 21:19:57.186166 [error] [webhook-verify] signature verification failed: verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试 alipay order=C2C25228824-2128-4844-a
+2026/09/18 21:19:57.190972 [warn] [webhook] alipay rejected: signature_invalid {"amount":1,"body":"gmt_create=2026-09-18+21%3A19%3A53\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C25228824-2128-4844-a\u0026sign=FTLNNHdsMybIDo6NYVXP2dlegCB2op8326mC8fI4wOrK5OfqylF7BsSxmVAMyhAGBW0oyROQMRljiKlafFkPY8HVsCxyw6%2BbfVSBbUMOIsjeSX%2FnC4XuFkxPkGeD%2FdrwH357W%2BBaQPdLgvLTRBSHlxY%2BSlP8MaoK31hDgx8RuwOZ96ruK%2BX%2BZfF9RTc4Cnrbnzl769X%2F0xUrN5OTjFLuNhXF8VHTk67jlP2MUKolSnyqwXVMQh7xq3hPzeNBco23K4D%2F5cOBnuLc3A4btHMmkmDycH2Q7x1BZLr2powwHa1%2Blk%2F33Y0pNH9n9nTd%2FgoX1csaEFETnF09t8C0WZ9P4g%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222211955057991451345336\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A19%3A54\u0026notify_time=2026-09-18+21%3A19%3A55\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C25228824-2128-4844-a\u0026total_amount=0.01\u0026trade_no=2026091822001457991444351521\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1182,"channel":"alipay","currency":"CNY","detail":"verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试","duration_ms":6,"headers":{"Content-Length":"1182","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":401,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C25228824-2128-4844-a","outcome":"rejected","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"signature_invalid","remote_ip":"192.168.110.1","response":"{\"ok\":false,\"error\":{\"code\":\"WEBHOOK_VERIFY_FAILED\",\"message\":\"signature verification failed\"}}","signature_ok":false,"txn_ref":"2026091822001457991444351521"}
+[GIN] 2026/09/18 - 21:19:57 | 401 |   6.55ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+[GIN] 2026/09/18 - 21:20:32 | 200 |   5.37ms | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/18 - 21:20:32 | 200 | 411.99µs | 192.168.110.179 | GET      "/c2c/currencies/mine"
+[GIN] 2026/09/18 - 21:20:32 | 200 | 473.93µs | 192.168.110.179 | GET      "/c2c/payment-methods"
+[GIN] 2026/09/18 - 21:20:32 | 200 |   2.58ms | 192.168.110.179 | GET      "/c2c/merchant/orders?size=20"
+[GIN] 2026/09/18 - 21:20:32 | 200 |  11.66ms | 192.168.110.179 | GET      "/c2c/merchant/balance"
+2026/09/18 21:21:23.809200 http: TLS handshake error from 192.168.110.1:54786: tls: client offered only unsupported versions: [301]
+2026/09/18 21:21:23.924767 [error] [webhook-verify] signature verification failed: verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试 alipay order=C2Cfac80a0c-00f7-4794-9
+2026/09/18 21:21:23.928981 [warn] [webhook] alipay rejected: signature_invalid {"amount":7,"body":"gmt_create=2026-09-18+20%3A56%3A37\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2Cfac80a0c-00f7-4794-9\u0026sign=cYmZaBiDbQm%2B8plU83dMGgKKIHNH03Ym9IXSpm6J8sR0tJ%2BixwgT4OQIoM1pQrguXbNiqB8phBvqmd26qWg8a7ScS0FhQZx4mD6vS0QX5aSrShe9x2I5zI6qX1HZ27MaeHSf%2FDAOzaGY%2F5mk9bzkVz8pRQtByAwNgug7%2BHjh%2F7%2BM6iKZAReQZKF2VRJFX6MGxEdZi%2BW%2BrpkqJf42xBrA6R8d0Rgkz1tpsx9tIiOdlrnbokS%2F0eY72qscebpM8AA60Fe59ccplnFVV684qYgHNPH2mYvfjlUIonsUnN3ZW929%2B%2Bc540DiIfG0CUTOQLuVIOPKr9rmNvWj0PUISQfh2w%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.07\u0026notify_id=2026091801222205639057991451359855\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.07%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.07\u0026buyer_pay_amount=0.07\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+20%3A56%3A39\u0026notify_time=2026-09-18+21%3A21%3A21\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2Cfac80a0c-00f7-4794-9\u0026total_amount=0.07\u0026trade_no=2026091822001457991444367256\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1182,"channel":"alipay","currency":"CNY","detail":"verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试","duration_ms":4,"headers":{"Content-Length":"1182","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":401,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2Cfac80a0c-00f7-4794-9","outcome":"rejected","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"signature_invalid","remote_ip":"192.168.110.1","response":"{\"ok\":false,\"error\":{\"code\":\"WEBHOOK_VERIFY_FAILED\",\"message\":\"signature verification failed\"}}","signature_ok":false,"txn_ref":"2026091822001457991444367256"}
+[GIN] 2026/09/18 - 21:21:23 | 401 |    4.6ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:22:43.149505 http: TLS handshake error from 192.168.110.1:58406: tls: client offered only unsupported versions: [301]
+2026/09/18 21:22:43.267518 [error] [webhook-verify] signature verification failed: verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试 alipay order=C2C25228824-2128-4844-a
+2026/09/18 21:22:43.272171 [warn] [webhook] alipay rejected: signature_invalid {"amount":1,"body":"gmt_create=2026-09-18+21%3A19%3A53\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C25228824-2128-4844-a\u0026sign=Z3khBfDplT1H4GlGrjKdIfit%2BVLfoTNROuPlv0hsVqLiPidKMH8oNlzV8Q1XXngfbF8lXyWYg0pd0zlWU7Fql4bNu1fUMgVNad1XdF91zWB%2FQiyvNx2%2BPOhwrQG3GvBpGEgYNvEnaB%2BQEsPTuk1sLKgy10NOMhUP5lHoER1JMf%2FI09OQ7WRoW7gm7RfjPP9ixCUe3p%2FkP8%2BBu6WJnfZEDJ4gpH4Jtb3dNzjjgN8LyjDejwmxJgAIlLetS5vH1863zAm3ZXNa31lTppsS6hffTC7krOee%2BNPewjEkB5muuCOA38Sw%2FLr34zL0jXrTBMmaO53%2FGL%2FtJa2GyYCDhePpRg%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222211955057991451345336\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A19%3A54\u0026notify_time=2026-09-18+21%3A22%3A41\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C25228824-2128-4844-a\u0026total_amount=0.01\u0026trade_no=2026091822001457991444351521\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1180,"channel":"alipay","currency":"CNY","detail":"verify error: [verify signature error]: crypto/rsa: verification error；public_key 与 private_key 配对＝填的是「应用公钥」。异步通知验签必须用「支付宝公钥」（开放平台 → 应用 → 开发设置 → 接口加签方式 → 公钥模式 → 支付宝公钥），替换后重试","duration_ms":5,"headers":{"Content-Length":"1180","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":401,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C25228824-2128-4844-a","outcome":"rejected","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"signature_invalid","remote_ip":"192.168.110.1","response":"{\"ok\":false,\"error\":{\"code\":\"WEBHOOK_VERIFY_FAILED\",\"message\":\"signature verification failed\"}}","signature_ok":false,"txn_ref":"2026091822001457991444351521"}
+[GIN] 2026/09/18 - 21:22:43 | 401 |   5.84ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+[GIN] 2026/09/18 - 21:23:16 | 201 |  10.72ms | 192.168.110.179 | POST     "/c2c/payment-methods"
+[GIN] 2026/09/18 - 21:23:16 | 200 | 392.346µs | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/18 - 21:23:16 | 200 | 558.118µs | 192.168.110.179 | GET      "/c2c/currencies/mine"
+[GIN] 2026/09/18 - 21:23:16 | 200 |   3.38ms | 192.168.110.179 | GET      "/c2c/merchant/orders?size=20"
+[GIN] 2026/09/18 - 21:23:16 | 200 | 409.365µs | 192.168.110.179 | GET      "/c2c/payment-methods"
+[GIN] 2026/09/18 - 21:23:16 | 200 |  12.52ms | 192.168.110.179 | GET      "/c2c/merchant/balance"
+[GIN] 2026/09/18 - 21:23:18 | 200 |   3.48ms | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:23:18 | 200 | 277.303µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:23:18 | 200 |   3.07ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/18 - 21:23:18 | 200 |   3.53ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/18 21:28:09.942769 [warn] [risk-high-freq] high frequency ordering in 24h buyer=0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa orders_24h=42
+[GIN] 2026/09/18 - 21:28:09 | 201 |  19.15ms | 192.168.110.179 | POST     "/c2c/orders"
+[GIN] 2026/09/18 - 21:28:10 | 200 | 268.32µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/18 - 21:28:10 | 200 |   4.82ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/18 21:28:35.276784 http: TLS handshake error from 192.168.110.1:40422: tls: client offered only unsupported versions: [301]
+2026/09/18 21:28:35.406359 [error] [chain-release] C2C_CODE_VERSION not configured, on-chain release will be rejected C2C93a9f858-3972-42f4-8
+2026/09/18 21:28:35.409794 [error] [chain-release] C2C_CODE_VERSION not configured, on-chain release will be rejected C2C93a9f858-3972-42f4-8
+2026/09/18 21:28:35.411465 [error] [webhook-chain-release] chain release failed (order C2C93a9f858-3972-42f4-8 set to disputed, admin can re-release): C2C_CODE_VERSION not configured, on-chain release will be rejected C2C93a9f858-3972-42f4-8
+2026/09/18 21:28:35.413363 [warn] [webhook] alipay rejected: chain_release_failed {"amount":1,"body":"gmt_create=2026-09-18+21%3A28%3A32\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C93a9f858-3972-42f4-8\u0026sign=BNfBH0JoXW2iT7PzHh1fGngK7qn5VDXOcImO82U9NsohyQTbGNJSHoPMColHqHUB2rM83hihfA4uJkvG8MvhuRIEL4Dq7iPa5wB3TrKLq9q24s5sXCjA9S4Cn8J9rKAmcF0mcfY7A%2BdKuL7YnJNvSjxwh1DK1ZzaMxV%2F6gsfuVR6ZBbPa0R9IyyQPig4PzHxCHUsSJASCWj3k7lYcP0Qa8P7UEs7DKzeFEKeCYq8HMM%2F6xFuVDXor6NetBPkToriqH0aFBFQ9dkBpOCY%2FSSxkIDGh%2BqWvIig2GVGctOnGW5JnQIjQ1Sj2dTBoUimWQ%2B9O6dEbiULyYuhSV8fNBEQog%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222212834057991451385209\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A28%3A33\u0026notify_time=2026-09-18+21%3A28%3A34\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C93a9f858-3972-42f4-8\u0026total_amount=0.01\u0026trade_no=2026091822001457991445018494\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1170,"channel":"alipay","currency":"CNY","detail":"chain release failed (order C2C93a9f858-3972-42f4-8 set to disputed, admin can re-release): C2C_CODE_VERSION not configured, on-chain release will be rejected","duration_ms":13,"headers":{"Content-Length":"1170","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":401,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C93a9f858-3972-42f4-8","outcome":"rejected","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"chain_release_failed","remote_ip":"192.168.110.1","response":"{\"ok\":false,\"error\":{\"code\":\"WEBHOOK_VERIFY_FAILED\",\"message\":\"signature verification failed\"}}","signature_ok":true,"txn_ref":"2026091822001457991445018494"}
+[GIN] 2026/09/18 - 21:28:35 | 401 |  13.86ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:31:26.568331 http: TLS handshake error from 192.168.110.1:40730: tls: client offered only unsupported versions: [301]
+2026/09/18 21:31:26.694289 [info] [webhook] alipay accepted: ok_idempotent {"amount":1,"body":"gmt_create=2026-09-18+21%3A28%3A32\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C93a9f858-3972-42f4-8\u0026sign=T6cRhO6BYxzNzKRnA3feapZFDOfeEOpR6tG5o0BkjQ0GouJI85jFnepU22ZxYz5N8f2A%2BV%2FYNl0h2uI%2FJnlhpIIMarkqSOzO8lcRBMQIEJ%2BtKgwTLQHysidJIj0AwNCSjzjj6MrX1N5BG0tU4he0e%2B2gptourEY23bh8uD3KPU%2BbZPGf4%2FRWZiXmEHdKC68OOoj55uBCkOPokTHkfydIU2HzYb2ANbcDXphMxIA5fDT4NvIgYEFrT7SOoFKLFvmgGMcr65AsWtG5eWpKu6CtTy08UIVg2QrcdK4OxFfQ%2FDOZ%2FrS3nAD2Jqmctq9TrK99OcrD09U1ipjPRYxr1vv5bw%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222212834057991451385209\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A28%3A33\u0026notify_time=2026-09-18+21%3A31%3A25\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C93a9f858-3972-42f4-8\u0026total_amount=0.01\u0026trade_no=2026091822001457991445018494\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1176,"channel":"alipay","currency":"CNY","detail":"payment already recorded (id=1 order_id=42 status=received)","duration_ms":0,"headers":{"Content-Length":"1176","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C93a9f858-3972-42f4-8","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_idempotent","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001457991445018494"}
+[GIN] 2026/09/18 - 21:31:26 | 200 | 315.131µs |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:33:27.324420 http: TLS handshake error from 192.168.110.1:44098: tls: client offered only unsupported versions: [301]
+2026/09/18 21:33:27.452740 [error] [chain-release] C2C_CODE_VERSION not configured, on-chain release will be rejected C2C25228824-2128-4844-a
+2026/09/18 21:33:27.456050 [error] [chain-release] C2C_CODE_VERSION not configured, on-chain release will be rejected C2C25228824-2128-4844-a
+2026/09/18 21:33:27.457604 [error] [webhook-chain-release] chain release failed (order C2C25228824-2128-4844-a set to disputed, admin can re-release): C2C_CODE_VERSION not configured, on-chain release will be rejected C2C25228824-2128-4844-a
+2026/09/18 21:33:27.459260 [warn] [webhook] alipay rejected: chain_release_failed {"amount":1,"body":"gmt_create=2026-09-18+21%3A19%3A53\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C25228824-2128-4844-a\u0026sign=GfE7FGu18MMnqvv5wieK9OcYKJl6xcCubTUxKYjAgE%2BczuNy%2FVpbHUGhWS7zVUU9MoAmXrJefuOGuX5G5NVrGZRz6MhGthfE9LuKtRayWZ9M2b0NcQDK82fpG91RhaxnWWsFIYIPFbMGzD5zH1g9cJQ6ttZK%2Bqe%2FYUH07Rd7ImN%2Bo5bnu43tZf0tFK6z0wbtk3NQ%2BpDZie%2B8eL%2BEfm5xAGoJu5FGm%2BO%2Bu8HsJjunfmoL6DqZlT07js7chHacoc5aIOR1wabIrsyb20fh7nA3X7hVWU71yPiGiJIjXVcuROPtG3F6tBqMvuF1WG3bJimfKThzSHVKWpf6GewnU3oZDQ%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222211955057991451345336\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A19%3A54\u0026notify_time=2026-09-18+21%3A33%3A26\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C25228824-2128-4844-a\u0026total_amount=0.01\u0026trade_no=2026091822001457991444351521\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1178,"channel":"alipay","currency":"CNY","detail":"chain release failed (order C2C25228824-2128-4844-a set to disputed, admin can re-release): C2C_CODE_VERSION not configured, on-chain release will be rejected","duration_ms":14,"headers":{"Content-Length":"1178","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":401,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C25228824-2128-4844-a","outcome":"rejected","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"chain_release_failed","remote_ip":"192.168.110.1","response":"{\"ok\":false,\"error\":{\"code\":\"WEBHOOK_VERIFY_FAILED\",\"message\":\"signature verification failed\"}}","signature_ok":true,"txn_ref":"2026091822001457991444351521"}
+[GIN] 2026/09/18 - 21:33:27 | 401 |   14.9ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:43:36.329964 http: TLS handshake error from 192.168.110.1:33228: tls: client offered only unsupported versions: [301]
+2026/09/18 21:43:36.471441 [error] [late-payment] late payment after cancel C2Cf29d9e74-011e-4167-a
+2026/09/18 21:43:36.472969 [info] [webhook] alipay accepted: ok_late_payment {"amount":7,"body":"gmt_create=2026-09-18+20%3A17%3A29\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2Cf29d9e74-011e-4167-a\u0026sign=CHSsYC513DCgqilapYosk7S0Wh9Dh2oTeOXdM5L9cxIWx6LEvqraxSltaydTljsJl7ag0LObQUTnWBI%2B%2F22elBvNpqVbas3pz2D2nr%2BlNRxvDkIvIubrMx2OUMPeirZ6E65nydkNkqNznayn4Rm72CR%2F0dcB9%2FaI4BThDJ9C%2BiiNvjuYHKgsj4aHJu2nPRV8rGzW7ZjNaArZT4iMmcfM1sFI02M4JQmaryRhAfJxBw6OPHGDX31TenklX3C4cqj07AyrF2XmjYgOauRvcYetnHM4itkb8QGaE8ETNYhPnYvBkc1c%2FTtYFDjbCDfBC%2FWtUI%2FP6tqTJM3lTb10ywpURQ%3D%3D\u0026buyer_open_id=018zelueVWeqS1OhtGEtat6v-YsS_SD23mdgnAYOznTOcgc\u0026invoice_amount=0.07\u0026notify_id=2026091801222201730077181445004239\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.07%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.07\u0026buyer_pay_amount=0.07\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+20%3A17%3A29\u0026notify_time=2026-09-18+21%3A43%3A35\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2Cf29d9e74-011e-4167-a\u0026total_amount=0.07\u0026trade_no=2026091822001477181436035989\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=152****3583\u0026point_amount=0.00","body_bytes":1176,"channel":"alipay","currency":"CNY","detail":"payment arrived after order cancel; recorded and order set disputed","duration_ms":7,"headers":{"Content-Length":"1176","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2Cf29d9e74-011e-4167-a","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_late_payment","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001477181436035989"}
+[GIN] 2026/09/18 - 21:43:36 | 200 |   7.78ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:44:23.657870 http: TLS handshake error from 192.168.110.1:44018: tls: client offered only unsupported versions: [301]
+2026/09/18 21:44:23.782429 [info] [webhook] alipay accepted: ok_idempotent {"amount":1,"body":"gmt_create=2026-09-18+21%3A19%3A53\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2C25228824-2128-4844-a\u0026sign=iCilZapmRf%2Bqk7bUbkHCdn5b7xORnm3PyHeSjjD0qx3%2BKRLdSN0D3AVxfpwzfRpui7eo%2BqSUXABSF7iE1mI9Mcl4poHOe3P5UzUQyMm96XYT7wzX3u%2BTomkEnHx%2FbRbZxjtrxOs8akxMpH95mdw8fR5e5F3JcFnsBCGtHZx3rHS93M3lkAP45SZXG0vhyqcjF6YvXmLTB6RcS0OUMCMDM6L5osL%2FEt0QnViuGyUrxtB8URH7UbAQSwHW54D4%2FX0omBeSGcZWmWF2%2FVUogJNburKboVNpbIM7tB3ebt8%2B0ckcyH%2BFyMCHbvqGtQQ6cJvh%2FH6qTR8Eu2tHSyou8jlycQ%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.01\u0026notify_id=2026091801222211955057991451345336\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.01%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.01\u0026buyer_pay_amount=0.01\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+21%3A19%3A54\u0026notify_time=2026-09-18+21%3A44%3A22\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2C25228824-2128-4844-a\u0026total_amount=0.01\u0026trade_no=2026091822001457991444351521\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1180,"channel":"alipay","currency":"CNY","detail":"payment already recorded (id=2 order_id=41 status=received)","duration_ms":0,"headers":{"Content-Length":"1180","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2C25228824-2128-4844-a","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_idempotent","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001457991444351521"}
+[GIN] 2026/09/18 - 21:44:23 | 200 |   1.12ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 21:54:43.926207 http: TLS handshake error from 192.168.110.1:45646: tls: client offered only unsupported versions: [301]
+2026/09/18 21:54:44.044108 [error] [late-payment] late payment after cancel C2Ccd14a0d5-7338-4afe-a
+2026/09/18 21:54:44.045065 [info] [webhook] alipay accepted: ok_late_payment {"amount":7,"body":"gmt_create=2026-09-18+20%3A28%3A35\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2Ccd14a0d5-7338-4afe-a\u0026sign=UqbsJbcxlQlFobMhLAuz6YXrV95aISc7iFFojQDNzViyKRivZ8nj0B8Vf7PVH1g%2F%2FRINuhDZ4O3bkCTl0ChzIb%2BKWNG9OkR%2BLhBjbFOdqmiLHYqwFZUoKR7M95s0aMHGvlgLEDc4a9i%2Bgo9z4BgrJnTCMNywnvpn9MjJUwg8CGVsteAPFOqzZ7UXv5j0aACqyyQ95vY2hYkH0nbD53wMhDL5vGrEwEAUFI93Fh1d%2BaGuM5ZDGJniS2KBXQ0PCQrkcSd0TJezNB4ZOoi8XAqgRzThe%2BKx4Otz7z7sA7HEybghPVRfwMemIdN9ZjJW7%2B6dP%2BNkTjzV0DgNAAYfgHlWPw%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.07\u0026notify_id=2026091801222202852057991452112784\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.07%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.07\u0026buyer_pay_amount=0.07\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+20%3A28%3A51\u0026notify_time=2026-09-18+21%3A54%3A42\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2Ccd14a0d5-7338-4afe-a\u0026total_amount=0.07\u0026trade_no=2026091822001457991444432776\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1176,"channel":"alipay","currency":"CNY","detail":"payment arrived after order cancel; recorded and order set disputed","duration_ms":2,"headers":{"Content-Length":"1176","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2Ccd14a0d5-7338-4afe-a","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_late_payment","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001457991444432776"}
+[GIN] 2026/09/18 - 21:54:44 | 200 |   2.46ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 22:06:46.166873 http: TLS handshake error from 192.168.110.1:40184: tls: client offered only unsupported versions: [301]
+2026/09/18 22:06:46.288269 [error] [late-payment] late payment after cancel C2Cf311000f-3a7b-4728-8
+2026/09/18 22:06:46.289939 [info] [webhook] alipay accepted: ok_late_payment {"amount":7,"body":"gmt_create=2026-09-18+18%3A39%3A00\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2Cf311000f-3a7b-4728-8\u0026sign=NyyiwOfLGmOyU8Pki5%2F%2B4LrNm%2FtMHsk%2BlyTRQ%2BfofwyxJ%2Fg6N6e1X%2Fe4GlNhYVJ%2FwWOHcGAIvv95EArDqyLsMXxsdJ0dJOnay6ZY%2BXfBG4qQJQuehEkY82hNEFC7zxWLItI0tiuY7lq%2B8N7L%2FUt5WZzeaimUOAgyT%2Bfpsq07s5uXTPbuq6stU0POav5qjVFbMtbDJOmnSHL%2BlTRdeyCN2hiSmrQNZzTGxOcWRVFODLXoUKHyDTw87PYdkyifyetXw564uunpPnqzbPY9dVEigH59%2FDPcCjBbSoWKkjQ72%2BnU%2F5mMSnmI6suIFKngxNLIq1IXrJkxNKQT9aP83AE1Dg%3D%3D\u0026buyer_open_id=018zelueVWeqS1OhtGEtat6v-YsS_SD23mdgnAYOznTOcgc\u0026invoice_amount=0.07\u0026notify_id=2026091801222183901077181445143387\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.07%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.07\u0026buyer_pay_amount=0.07\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+18%3A39%3A00\u0026notify_time=2026-09-18+22%3A06%3A45\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2Cf311000f-3a7b-4728-8\u0026total_amount=0.07\u0026trade_no=2026091822001477181436035987\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=152****3583\u0026point_amount=0.00","body_bytes":1190,"channel":"alipay","currency":"CNY","detail":"payment arrived after order cancel; recorded and order set disputed","duration_ms":7,"headers":{"Content-Length":"1190","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2Cf311000f-3a7b-4728-8","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_late_payment","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001477181436035987"}
+[GIN] 2026/09/18 - 22:06:46 | 200 |   7.76ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+2026/09/18 22:22:33.336721 http: TLS handshake error from 192.168.110.1:36168: tls: client offered only unsupported versions: [301]
+2026/09/18 22:22:33.448254 [error] [late-payment] late payment after cancel C2Cfac80a0c-00f7-4794-9
+2026/09/18 22:22:33.449987 [info] [webhook] alipay accepted: ok_late_payment {"amount":7,"body":"gmt_create=2026-09-18+20%3A56%3A37\u0026charset=utf-8\u0026seller_email=422145328%40qq.com\u0026subject=AI%E6%9C%8D%E5%8A%A1+C2Cfac80a0c-00f7-4794-9\u0026sign=eamtd2KS3arpLBdAYJeGw6kVwdex3RS8m494LfOcwOuNwjForMm2Cy7rw97il7OPkQ7hXZ%2Bo1r5TLlibFS72KkNa4JYxsHFuC%2FqqnsTN%2BvOq3LKeHI9ghiVpUlICbgQHxDk6wcv%2FAjtPoWU5bI9XkY2XljiGH5ar0rtYkggOdk0XxmLUG3quxXyrJ9Q8TK3cNj0MZ5DBZl7rXkSbXkNhd43vVg5zPoCWi0s8rTJA1JKWpMosyM1KfuXKuyvADWwIJKK4PihsJvtlnBl1w%2F51qePwhrq0SDCL75DdvfxFWeHUaoMp%2F2ulcUTA0kgCUpnEAVt3MAAfyxYPeuQOeae6nQ%3D%3D\u0026buyer_open_id=099zelueVWeqS1OhtGEtat6v5mrO-9urVsy7XTafmniz4g1\u0026invoice_amount=0.07\u0026notify_id=2026091801222205639057991451359855\u0026fund_bill_list=%5B%7B%22amount%22%3A%220.07%22%2C%22fundChannel%22%3A%22ALIPAYACCOUNT%22%7D%5D\u0026notify_type=trade_status_sync\u0026trade_status=TRADE_SUCCESS\u0026receipt_amount=0.07\u0026buyer_pay_amount=0.07\u0026app_id=2021006197660764\u0026sign_type=RSA2\u0026seller_id=2088502969603327\u0026gmt_payment=2026-09-18+20%3A56%3A39\u0026notify_time=2026-09-18+22%3A22%3A32\u0026merchant_app_id=2021006197660764\u0026version=1.0\u0026out_trade_no=C2Cfac80a0c-00f7-4794-9\u0026total_amount=0.07\u0026trade_no=2026091822001457991444367256\u0026auth_app_id=2021006197660764\u0026buyer_logon_id=199****8329\u0026point_amount=0.00","body_bytes":1170,"channel":"alipay","currency":"CNY","detail":"payment arrived after order cancel; recorded and order set disputed","duration_ms":7,"headers":{"Content-Length":"1170","Content-Type":"application/x-www-form-urlencoded; charset=utf-8","User-Agent":"Mozilla/4.0"},"http_status":200,"merchant_id":"0xbce2b315f7b1ea05d4f3211e7ccca5057c298aaa","method":"POST","order_no":"C2Cfac80a0c-00f7-4794-9","outcome":"accepted","path":"/c2c/webhooks/alipay","payment_method_id":1,"reason":"ok_late_payment","remote_ip":"192.168.110.1","response":"success","signature_ok":true,"txn_ref":"2026091822001457991444367256"}
+[GIN] 2026/09/18 - 22:22:33 | 200 |   8.09ms |   192.168.110.1 | POST     "/c2c/webhooks/alipay"
+[GIN] 2026/09/18 - 23:10:44 | 200 |   5.44ms | 192.168.110.179 | GET      "/c2c/orders/C2C93a9f858-3972-42f4-8"
+[GIN] 2026/09/18 - 23:10:53 | 200 | 363.838µs | 192.168.110.179 | GET      "/c2c/orders/C2Ccd14a0d5-7338-4afe-a"
+[GIN] 2026/09/18 - 23:11:28 | 200 | 397.358µs | 192.168.110.179 | GET      "/c2c/orders/C2C4ff042e3-66e1-4954-8"
+2026/09/20 17:04:57.216029 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/20 17:04:57.226383 [JOB 1] WAL file c2c_data/000048.log with log number 000048 stopped reading at offset: 47440; replayed 190 keys in 32 batches
+2026/09/20 17:04:57.269713 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+2026/09/20 17:04:58.717352 [c2c] WARN: sync nonce failed (tee-node contractNonce for node not available?): Post "https://xiaobai.asyou.me:30118/gql": EOF
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/20 17:04:58.766931 [c2c-service] listening on 0.0.0.0:8007 (http)
+2026/09/20 17:05:28.770845 [c2c-poll] cleaned 39 expired idempotency keys
+[GIN] 2026/09/20 - 21:12:35 | 200 | 117.42ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/20 - 21:12:35 | 401 | 106.538µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/20 - 21:12:35 | 200 |   3.66ms | 192.168.110.179 | GET      "/c2c/config"
+2026/09/20 22:16:44.700835 shutting down c2c service
+2026/09/20 22:23:15.764638 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/20 22:23:15.776776 [JOB 1] WAL file c2c_data/000053.log with log number 000053 stopped reading at offset: 3258; replayed 39 keys in 1 batches
+2026/09/20 22:23:15.791321 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+2026/09/20 22:23:15.808257 [c2c] WARN: sync nonce failed (tee-node contractNonce for node not available?): Post "https://xiaobai.asyou.me:30118/gql": read tcp 192.168.110.205:47178->121.63.107.23:30118: read: connection reset by peer
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/20 22:23:15.819837 [c2c-service] listening on 0.0.0.0:8007 (http)
+2026/09/20 22:27:18.750290 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/20 22:27:18.750839 [JOB 1] WAL file c2c_data/000057.log with log number 000057 stopped reading at offset: 0; replayed 0 keys in 0 batches
+2026/09/20 22:27:18.761315 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/20 22:27:18.790416 [c2c-service] listening on 0.0.0.0:8007 (http)
+2026/09/20 22:29:29.754811 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/20 22:29:29.755145 [JOB 1] WAL file c2c_data/000061.log with log number 000061 stopped reading at offset: 0; replayed 0 keys in 0 batches
+2026/09/20 22:29:29.761858 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/20 22:29:29.795438 [c2c-service] listening on 0.0.0.0:8007 (http)
+2026/09/20 22:34:38.428980 shutting down c2c service
+2026/09/23 09:08:30.405549 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/23 09:08:30.406519 [JOB 1] WAL file c2c_data/000064.log with log number 000064 stopped reading at offset: 0; replayed 0 keys in 0 batches
+2026/09/23 09:08:30.414818 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/23 09:08:30.440905 [c2c-service] listening on 0.0.0.0:8007 (http)
+[GIN] 2026/09/23 - 09:08:39 | 200 | 291.409µs |       127.0.0.1 | GET      "/c2c/health"
+[GIN] 2026/09/23 - 09:10:37 | 200 |   83.9ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/23 - 09:10:37 | 401 | 86.542µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:10:37 | 200 |   3.47ms | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:10:37 | 401 |   4.89ms | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:10:37 | 401 |    4.9ms | 192.168.110.179 | GET      "/c2c/admin/config"
+[GIN] 2026/09/23 - 09:10:37 | 200 | 145.931µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:10:37 | 401 |   3.95ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/23 09:12:57.553694 shutting down c2c service
+2026/09/23 09:12:57.593947 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/23 09:12:57.594586 [JOB 1] WAL file c2c_data/000067.log with log number 000067 stopped reading at offset: 218; replayed 1 keys in 1 batches
+2026/09/23 09:12:57.604740 [c2c] 使用节点密钥 0x44859a26daf8cfff87f493abdd33f4d114ebc24faae5f8c210a3f5300e63310e（链上 registerNode / 放款用该地址）
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] POST   /c2c/merchant/escrow/deposit --> main.(*Service).depositEscrow-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func12 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func14 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func16 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/23 09:12:57.639945 [c2c-service] listening on 0.0.0.0:8007 (https)
+[GIN] 2026/09/23 - 09:13:00 | 200 | 42.117µs |       127.0.0.1 | GET      "/c2c/health"
+[GIN] 2026/09/23 - 09:13:08 | 404 | 13.919µs | 192.168.110.179 | GET      "/"
+[GIN] 2026/09/23 - 09:13:09 | 404 | 19.315µs | 192.168.110.179 | GET      "/favicon.ico"
+[GIN] 2026/09/23 - 09:13:28 | 204 | 52.918µs | 192.168.110.179 | OPTIONS  "/c2c/orders"
+[GIN] 2026/09/23 - 09:13:28 | 401 |   4.62ms | 192.168.110.179 | POST     "/c2c/orders"
+[GIN] 2026/09/23 - 09:13:29 | 401 |   2.47ms | 192.168.110.179 | POST     "/c2c/orders"
+[GIN] 2026/09/23 - 09:13:30 | 401 |   3.96ms | 192.168.110.179 | POST     "/c2c/orders"
+[GIN] 2026/09/23 - 09:19:04 | 204 | 51.903µs | 192.168.110.179 | OPTIONS  "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:19:04 | 404 | 22.237µs | 192.168.110.179 | POST     "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:19:48 | 204 | 60.815µs | 192.168.110.179 | OPTIONS  "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:19:48 | 404 | 15.687µs | 192.168.110.179 | POST     "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:20:10 | 204 | 55.946µs | 192.168.110.179 | OPTIONS  "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:20:10 | 404 | 21.667µs | 192.168.110.179 | POST     "/c2c/public/orders"
+2026/09/23 09:20:49.557074 shutting down c2c service
+2026/09/23 09:20:49.652672 [c2c] 日志写入 /home/wetee/work/cathome/workflow/logs/c2c.log（同时输出终端；C2C_LOG_FILE 可改）
+2026/09/23 09:20:49.652706 [c2c] TEE: 不可用（GetSelfReport: OE_UNSUPPORTED）。
+2026/09/23 09:20:49.653046 [JOB 1] WAL file c2c_data/000071.log with log number 000071 stopped reading at offset: 0; replayed 0 keys in 0 batches
+2026/09/23 09:20:49.661551 [c2c] 使用节点密钥 ed25519 0x9c77e9b3da82eac855de5a7383ec54ed22ce4e15bc7f8fe8cc9a1c05ca213f93（链上 registerNode / 放款用该地址）
+2026/09/23 09:20:49.661559 [c2c] 代码密钥公钥（CodeSignature 验签用，须 == TEE quote 证明的 MRSIGNER）: 8258e906a77735eb2ce25adada88c9564d5b5945a53f544e18664e51ced9eddd
+2026/09/23 09:20:49.716712 [c2c] 节点链上 nonce 就绪（下次提交 nonce=1）
+2026/09/23 09:20:49.716845 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /c2c/health               --> main.main.func1 (5 handlers)
+[GIN-debug] GET    /c2c/ui                   --> main.main.func2 (5 handlers)
+[GIN-debug] GET    /c2c/config               --> main.(*Service).getConfig-fm (5 handlers)
+[GIN-debug] GET    /c2c/tee                  --> main.(*Service).getTee-fm (5 handlers)
+[GIN-debug] POST   /c2c/tee/resync           --> main.(*Service).resyncTee-fm (5 handlers)
+[GIN-debug] GET    /c2c/offers               --> main.(*Service).listOffers-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no       --> main.(*Service).gotoPayment-fm (5 handlers)
+[GIN-debug] GET    /c2c/goto/:order_no/status --> main.(*Service).gotoStatus-fm (5 handlers)
+[GIN-debug] POST   /c2c/public/orders        --> main.(*Service).publicCreateOrder-fm (5 handlers)
+[GIN-debug] GET    /c2c/public/orders/:order_no --> main.(*Service).publicGetOrderStatus-fm (5 handlers)
+[GIN-debug] GET    /c2c/me                   --> main.(*Service).getMe-fm (6 handlers)
+[GIN-debug] PUT    /c2c/buyer/preferences    --> main.(*Service).setBuyerPreferences-fm (6 handlers)
+[GIN-debug] GET    /c2c/preview              --> main.(*Service).preview-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders               --> main.(*Service).createOrder-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders               --> main.(*Service).listOrders-fm (6 handlers)
+[GIN-debug] GET    /c2c/orders/:order_no     --> main.(*Service).getOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/evidence --> main.(*Service).evidence-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/cancel --> main.(*Service).cancelOrder-fm (6 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/complete --> main.main.(*Audit).WithAudit.func13 (6 handlers)
+[GIN-debug] POST   /c2c/disputes             --> main.(*Service).dispute-fm (6 handlers)
+[GIN-debug] PUT    /c2c/merchant/payee       --> main.(*Service).putPayee-fm (7 handlers)
+[GIN-debug] POST   /c2c/payment-methods      --> main.(*Service).createPaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/payment-methods      --> main.(*Service).listPaymentMethods-fm (7 handlers)
+[GIN-debug] PUT    /c2c/payment-methods/:id/default --> main.(*Service).setPaymentMethodDefault-fm (7 handlers)
+[GIN-debug] DELETE /c2c/payment-methods/:id  --> main.(*Service).deletePaymentMethod-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/balance     --> main.(*Service).merchantBalance-fm (7 handlers)
+[GIN-debug] GET    /c2c/merchant/orders      --> main.(*Service).merchantOrders-fm (7 handlers)
+[GIN-debug] POST   /c2c/currencies           --> main.(*Service).setCurrency-fm (7 handlers)
+[GIN-debug] GET    /c2c/currencies/mine      --> main.(*Service).listMyCurrencies-fm (7 handlers)
+[GIN-debug] GET    /c2c/ledger               --> main.(*Service).ledger-fm (7 handlers)
+[GIN-debug] POST   /c2c/orders/:order_no/confirm --> main.main.(*Audit).WithAudit.func15 (7 handlers)
+[GIN-debug] GET    /c2c/admin/config         --> main.(*Service).adminGetConfig-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/config         --> main.main.(*Audit).WithAudit.func17 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders         --> main.(*Service).adminListOrders-fm (7 handlers)
+[GIN-debug] GET    /c2c/admin/disputes       --> main.(*Service).adminListDisputes-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/disputes/:id   --> main.main.(*Audit).WithAudit.func18 (7 handlers)
+[GIN-debug] GET    /c2c/admin/merchants      --> main.(*Service).adminListMerchants-fm (7 handlers)
+[GIN-debug] PUT    /c2c/admin/merchants/:id/status --> main.main.(*Audit).WithAudit.func19 (7 handlers)
+[GIN-debug] GET    /c2c/admin/orders/:order_no/payment --> main.main.(*Audit).WithAudit.func20 (7 handlers)
+[GIN-debug] POST   /c2c/admin/orders/:order_no/release --> main.main.(*Audit).WithAudit.func21 (7 handlers)
+[GIN-debug] POST   /c2c/webhooks/:channel    --> main.(*Service).webhook-fm (5 handlers)
+2026/09/23 09:20:49.720014 [c2c-service] listening on 0.0.0.0:8007 (https)
+[GIN] 2026/09/23 - 09:21:10 | 400 | 59.289µs |       127.0.0.1 | POST     "/c2c/public/orders"
+[GIN] 2026/09/23 - 09:21:10 | 404 | 286.925µs |       127.0.0.1 | GET      "/c2c/public/orders/C2CSMOKE?buyer_address=0x0000000000000000000000000000000000000000"
+[GIN] 2026/09/23 - 09:21:36 | 200 |  1.489ms |       127.0.0.1 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:21:36 | 200 | 41.442µs |       127.0.0.1 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:24:05 | 404 | 15.143µs | 192.168.110.179 | GET      "/"
+[GIN] 2026/09/23 - 09:24:11 | 404 | 15.782µs | 192.168.110.179 | GET      "/c2c/"
+[GIN] 2026/09/23 - 09:24:15 | 200 | 79.215ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/23 - 09:24:16 | 200 | 35.676µs | 192.168.110.179 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:24:16 | 401 | 28.927µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:24:16 | 200 |  1.731ms | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:16 | 200 |  2.488ms | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:24:16 | 403 |  2.485ms | 192.168.110.179 | GET      "/c2c/admin/config"
+[GIN] 2026/09/23 - 09:24:16 | 200 | 107.553µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:16 | 200 |  1.938ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:24:28 | 200 | 83.055ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/23 - 09:24:29 | 401 | 90.117µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:24:29 | 200 | 119.464µs | 192.168.110.179 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:24:29 | 200 | 266.281µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:29 | 403 | 86.149µs | 192.168.110.179 | GET      "/c2c/admin/config"
+[GIN] 2026/09/23 - 09:24:29 | 200 | 335.58µs | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:24:29 | 200 | 295.683µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:29 | 200 |  4.317ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:24:30 | 200 | 441.629µs | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:24:30 | 200 | 460.417µs | 192.168.110.179 | GET      "/c2c/currencies/mine"
+[GIN] 2026/09/23 - 09:24:30 | 200 | 519.405µs | 192.168.110.179 | GET      "/c2c/payment-methods"
+[GIN] 2026/09/23 - 09:24:30 | 200 |  2.857ms | 192.168.110.179 | GET      "/c2c/merchant/orders?size=20"
+[GIN] 2026/09/23 - 09:24:30 | 200 | 11.981ms | 192.168.110.179 | GET      "/c2c/merchant/balance"
+[GIN] 2026/09/23 - 09:24:33 | 200 | 282.646µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:33 | 200 | 249.762µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:24:33 | 200 |  3.982ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:24:33 | 200 |  3.991ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/23 09:25:49.718045 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+2026/09/23 09:30:49.718151 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+2026/09/23 09:35:49.718078 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+2026/09/23 09:40:49.717201 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+[GIN] 2026/09/23 - 09:44:46 | 200 | 140.359µs | 192.168.110.179 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:45:03 | 200 | 38.392µs | 192.168.110.179 | GET      "/c2c/tee"
+2026/09/23 09:45:05.328986 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+[GIN] 2026/09/23 - 09:45:05 | 200 | 75.485µs | 192.168.110.179 | POST     "/c2c/tee/resync"
+[GIN] 2026/09/23 - 09:45:16 | 200 | 104.519ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/23 - 09:45:16 | 200 | 54.191µs | 192.168.110.179 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:45:16 | 401 | 13.786µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:45:16 | 200 |  2.658ms | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:45:16 | 403 |  2.497ms | 192.168.110.179 | GET      "/c2c/admin/config"
+[GIN] 2026/09/23 - 09:45:16 | 200 |   2.85ms | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:45:16 | 200 | 132.607µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:45:16 | 200 |  1.189ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:45:18 | 200 | 41.589µs | 192.168.110.179 | GET      "/c2c/tee"
+2026/09/23 09:45:49.717435 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+[GIN] 2026/09/23 - 09:46:04 | 200 | 92.352ms | 192.168.110.179 | GET      "/c2c/ui"
+[GIN] 2026/09/23 - 09:46:04 | 401 | 102.041µs | 192.168.110.179 | GET      "/c2c/orders?size=20"
+[GIN] 2026/09/23 - 09:46:04 | 200 | 187.961µs | 192.168.110.179 | GET      "/c2c/tee"
+[GIN] 2026/09/23 - 09:46:04 | 403 | 84.968µs | 192.168.110.179 | GET      "/c2c/admin/config"
+[GIN] 2026/09/23 - 09:46:04 | 200 | 444.088µs | 192.168.110.179 | GET      "/c2c/me"
+[GIN] 2026/09/23 - 09:46:04 | 200 |  3.575ms | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:46:04 | 200 | 118.005µs | 192.168.110.179 | GET      "/c2c/config"
+[GIN] 2026/09/23 - 09:46:04 | 200 |  1.199ms | 192.168.110.179 | GET      "/c2c/orders?size=20"
+2026/09/23 09:50:49.717759 [c2c] WARN: TEE 证明不可用，代码版本核对无法执行（对外按版本错误处理，fail-closed）
+2026/09/23 09:52:12.524261 shutting down c2c service

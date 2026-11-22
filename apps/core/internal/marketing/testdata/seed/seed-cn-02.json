@@ -1,0 +1,11 @@
+{
+  "id": "seed-cn-02",
+  "region": "cn",
+  "product": "network",
+  "source": "juejin",
+  "source_ref": "post-12001",
+  "url": "https://juejin.cn/post/12001",
+  "author": "user-012",
+  "excerpt": "调用海外推理接口，首 token 延迟 3 秒多，用户等不了。有没有低延迟的接入方式？我们量不大，月调用量大概几万次。",
+  "found_at": "2026-10-03T13:20:00Z"
+}

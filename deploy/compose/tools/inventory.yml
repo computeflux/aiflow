@@ -1,0 +1,18 @@
+# S5 软件资产画像工具（docs/plan/S5-软件接管与部署编排.md §3.1）：
+# 扫描仓库生成全资产画像 → software_assets 表（含不纳管资产的 external 标注）。
+# 用法：docker compose --profile tools run inventory
+services:
+  inventory:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: inventory
+    image: computeflux/inventory:latest
+    container_name: inventory
+    profiles: ["tools"]
+    env_file: ../../../.env
+    networks: [workflow-net]
+    volumes:
+      - ../../../:/work:ro
+    labels: ["part-of=compute-flux-workflow"]

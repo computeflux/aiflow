@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUTH · 统一权限认证管理</title>
+<style>
+:root{
+  --bg-app:#121212; --bg-sidebar:#000; --bg-surface:#0D0D0F; --bg-elevated:#18181B;
+  --bg-hover:#27272A; --border:#27272A; --border-subtle:#2D2929;
+  --text:#E4E4E7; --text2:#A1A1AA; --muted:#71717A;
+  --success:#10B981; --danger:#EF4444; --warning:#F59E0B; --info:#3B82F6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-app);color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+a{color:var(--info);text-decoration:none}
+button{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);
+  padding:6px 12px;cursor:pointer;font-family:inherit;font-size:12px}
+button:hover{background:var(--bg-hover)}
+button.danger{border-color:var(--danger);color:var(--danger)}
+button.primary{background:#fff;color:#000;border-color:#fff;font-weight:700}
+input,select{background:var(--bg-surface);border:1px solid var(--border);color:var(--text);
+  padding:6px 10px;font-family:inherit;font-size:12px;outline:none}
+input:focus,select:focus{border-color:var(--text2)}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:180px;background:var(--bg-sidebar);border-right:1px solid var(--border);
+  padding:20px 0;flex-shrink:0}
+.sidebar .logo{padding:0 20px 20px;font-weight:700;font-size:15px;letter-spacing:2px}
+.sidebar .logo span{color:var(--muted);font-weight:400;font-size:11px;display:block;margin-top:4px;letter-spacing:0}
+.nav-item{padding:10px 20px;cursor:pointer;color:var(--text2);border-left:2px solid transparent}
+.nav-item:hover{background:var(--bg-hover);color:var(--text)}
+.nav-item.active{color:#fff;border-left-color:#fff;background:var(--bg-surface)}
+.main{flex:1;padding:24px 32px;overflow-x:auto}
+.page-title{font-size:16px;font-weight:700;margin:0 0 16px}
+.card{background:var(--bg-surface);border:1px solid var(--border);padding:16px;margin-bottom:16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{color:var(--muted);font-weight:400;font-size:11px;text-transform:uppercase}
+tr:hover td{background:var(--bg-hover)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot.on{background:var(--success)} .dot.off{background:var(--muted)}
+.tag{display:inline-block;background:var(--bg-elevated);border:1px solid var(--border-subtle);
+  padding:2px 8px;margin:2px;font-size:11px}
+.tag.x{cursor:pointer} .tag.x:hover{border-color:var(--danger);color:var(--danger)}
+.muted{color:var(--muted)} .small{font-size:11px}
+.err{color:var(--danger)} .ok{color:var(--success)}
+.pager{display:flex;gap:6px;align-items:center;margin-top:12px}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 24px}
+.kv div span{color:var(--muted);display:block;font-size:11px}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--bg-elevated);border:1px solid var(--border);
+  padding:10px 16px;display:none;z-index:99}
+#login-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;
+  align-items:center;justify-content:center;z-index:100}
+#login-box{background:var(--bg-surface);border:1px solid var(--border-subtle);padding:28px;width:360px}
+#login-box h2{margin:0 0 4px;font-size:15px} #login-box p{color:var(--muted);font-size:11px;margin:0 0 16px}
+#login-box .row{margin-bottom:10px} #login-box input{flex:1}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="login-overlay">
+  <div id="login-box">
+    <h2>AUTH 管理</h2>
+    <p>邮箱 OTP 登录（需 admin 角色）或输入管理 Token</p>
+    <div class="row"><input id="lg-email" placeholder="email" style="flex:1">
+      <button id="lg-send" onclick="sendOtp()">发送验证码</button></div>
+    <div class="row"><input id="lg-code" placeholder="6 位验证码" style="flex:1">
+      <button class="primary" onclick="doLogin()">登录</button></div>
+    <div class="row"><input id="lg-token" placeholder="…或 X-Admin-Token" style="flex:1">
+      <button onclick="doTokenLogin()">使用 Token</button></div>
+    <div id="lg-err" class="err small"></div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo">AUTH<span>统一权限认证 :8008</span></div>
+    <div class="nav-item active" data-page="users" onclick="nav('users')">用户</div>
+    <div class="nav-item" data-page="roles" onclick="nav('roles')">角色权限</div>
+    <div class="nav-item" data-page="audit" onclick="nav('audit')">审计日志</div>
+    <div class="nav-item" data-page="settings" onclick="nav('settings')">设置</div>
+    <div style="padding:20px;margin-top:40px" class="small muted" id="whoami"></div>
+  </div>
+  <div class="main">
+    <div id="page-users">
+      <div class="row" style="margin-bottom:16px">
+        <h1 class="page-title" style="margin:0">用户管理</h1><div class="spacer"></div>
+        <input id="u-q" placeholder="搜索 email/名称" onkeydown="if(event.key==='Enter')loadUsers(1)">
+        <button onclick="loadUsers(1)">查询</button>
+      </div>
+      <div class="card"><table>
+        <thead><tr><th>ID</th><th>邮箱</th><th>名称</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody id="u-body"></tbody>
+      </table>
+      <div class="pager" id="u-pager"></div></div>
+    </div>
+
+    <div id="page-user-detail" class="hidden">
+      <div class="row" style="margin-bottom:16px">
+        <button onclick="nav('users')">← 返回</button>
+        <h1 class="page-title" style="margin:0" id="ud-title"></h1><div class="spacer"></div>
+        <button id="ud-toggle" onclick="toggleUser()"></button>
+        <button class="danger" onclick="delUser()">删除</button>
+      </div>
+      <div class="card"><div class="kv" id="ud-info"></div></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:8px"><b>角色</b><div class="spacer"></div>
+          <select id="ud-role-sel"></select><button onclick="grantRole()">+ 添加</button></div>
+        <div id="ud-roles"></div>
+        <div class="row" style="margin:12px 0 8px"><b>直授权限（例外/临时）</b><div class="spacer"></div>
+          <input id="ud-perm" placeholder="app:resource:action" style="width:220px">
+          <input id="ud-perm-exp" placeholder="过期(可选) 2026-01-01T00:00:00Z" style="width:240px">
+          <button onclick="grantPerm()">+ 添加</button></div>
+        <div id="ud-perms"></div>
+        <div class="row" style="margin:12px 0 8px"><b>活跃会话</b><div class="spacer"></div>
+          <button class="danger" onclick="logoutAll()">全部下线</button></div>
+        <div id="ud-sessions"></div>
+      </div>
+    </div>
+
+    <div id="page-roles" class="hidden">
+      <div class="row" style="margin-bottom:16px">
+        <h1 class="page-title" style="margin:0">角色权限</h1><div class="spacer"></div>
+        <button class="primary" onclick="showNewRole()">+ 新建角色</button>
+      </div>
+      <div class="card hidden" id="nr-card">
+        <div class="row" style="margin-bottom:8px">
+          <input id="nr-id" placeholder="id（如 board_approver）">
+          <input id="nr-name" placeholder="名称">
+          <input id="nr-desc" placeholder="描述（可选）" style="flex:1">
+          <button class="primary" onclick="createRole()">创建</button></div>
+      </div>
+      <div class="row">
+        <div class="card" style="width:260px;flex-shrink:0;margin-bottom:0">
+          <div id="r-list"></div>
+        </div>
+        <div class="card" style="flex:1;margin-bottom:0" id="r-detail"></div>
+      </div>
+    </div>
+
+    <div id="page-audit" class="hidden">
+      <div class="row" style="margin-bottom:16px">
+        <h1 class="page-title" style="margin:0">审计日志</h1><div class="spacer"></div>
+        <input id="a-user" placeholder="user_id（可选）" style="width:180px">
+        <select id="a-action"><option value="">全部动作</option></select>
+        <input id="a-from" type="date"><input id="a-to" type="date">
+        <button onclick="loadAudit(1)">查询</button>
+      </div>
+      <div class="card"><table>
+        <thead><tr><th>时间</th><th>用户</th><th>动作</th><th>详情</th><th>IP</th></tr></thead>
+        <tbody id="a-body"></tbody>
+      </table>
+      <div class="pager" id="a-pager"></div></div>
+    </div>
+
+    <div id="page-settings" class="hidden">
+      <h1 class="page-title">设置</h1>
+      <div class="card"><b>Token 策略</b>
+        <div class="kv" style="margin-top:10px" id="st-tokens"></div>
+        <p class="small muted">access 短命 + 黑名单兜底；refresh 轮换 + 重放检测全吊销；角色变更 15min 内生效（快照过期），即时生效走 /authorize。</p>
+      </div>
+      <div class="card"><b>密钥</b>
+        <div class="row" style="margin-top:10px" id="st-keys"></div>
+        <p class="small muted">轮换：生成新密钥对后双公钥并存（JWKS 多 kid），下游按 kid 取公钥，无需重启。</p>
+      </div>
+      <div class="card"><b>权限点注册</b>
+        <div class="row" style="margin-top:10px">
+          <input id="st-perm" placeholder="app:resource:action" style="width:240px">
+          <input id="st-perm-desc" placeholder="描述（可选）" style="flex:1">
+          <button onclick="registerPerm()">注册</button></div>
+        <div id="st-perms" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+let token = localStorage.getItem('auth_admin_token') || '';
+let curUser = null, curRole = null, uPage = 1, aPage = 1;
+
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  t.style.borderColor = isErr ? 'var(--danger)' : 'var(--success)';
+  setTimeout(()=>t.style.display='none', 3000);
+}
+async function api(path, opts={}){
+  const headers = {'Content-Type':'application/json', ...(opts.headers||{})};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(path, {...opts, headers});
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtTime(s){ return s ? s.replace('T',' ').replace(/\.\d+Z$/,'') : '—'; }
+
+// ---- 登录 ----
+async function sendOtp(){
+  const email = document.getElementById('lg-email').value.trim();
+  if (!email) return;
+  try { await api('/otp/request', {method:'POST', body: JSON.stringify({email})});
+    toast('验证码已发送'); } catch(e){ toast(e.message, true); }
+}
+async function doLogin(){
+  try {
+    const r = await api('/otp/verify', {method:'POST', body: JSON.stringify({
+      email: document.getElementById('lg-email').value.trim(),
+      code: document.getElementById('lg-code').value.trim()})});
+    if (!(r.user?.roles||[]).includes('admin')) throw new Error('该用户无 admin 角色');
+    token = r.access_token; localStorage.setItem('auth_admin_token', token);
+    enter();
+  } catch(e){ document.getElementById('lg-err').textContent = e.message; }
+}
+async function doTokenLogin(){
+  const t = document.getElementById('lg-token').value.trim();
+  if (!t) return;
+  token = t; localStorage.setItem('auth_admin_token', t);
+  try { await api('/users?size=1'); enter(); }
+  catch(e){ document.getElementById('lg-err').textContent = 'Token 无效: ' + e.message; token=''; localStorage.removeItem('auth_admin_token'); }
+}
+function enter(){
+  document.getElementById('login-overlay').style.display = 'none';
+  loadMe(); nav('users');
+}
+async function loadMe(){
+  try {
+    const me = await api('/me');
+    document.getElementById('whoami').innerHTML =
+      `${esc(me.email||me.id)}<br><span class="muted">${(me.roles||[]).join(', ')}</span>`;
+  } catch(e){ /* admin-token 模式下 /me 可能 401，忽略 */ }
+}
+
+// ---- 导航 ----
+function nav(page){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===page));
+  ['users','user-detail','roles','audit','settings'].forEach(p=>
+    document.getElementById('page-'+p).classList.toggle('hidden', p!==page));
+  if (page==='users') loadUsers(uPage);
+  if (page==='roles') loadRoles();
+  if (page==='audit') loadAudit(aPage);
+  if (page==='settings') loadSettings();
+}
+
+// ---- 用户 ----
+async function loadUsers(page){
+  uPage = page;
+  const q = document.getElementById('u-q').value.trim();
+  try {
+    const d = await api(`/users?page=${page}&size=20${q?`&q=${encodeURIComponent(q)}`:''}`);
+    document.getElementById('u-body').innerHTML = d.items.map(u=>`
+      <tr><td class="small">${esc(u.id)}</td><td>${esc(u.email)||'—'}</td><td>${esc(u.name)||'—'}</td>
+      <td class="muted small">—</td>
+      <td><span class="dot ${u.status==='active'?'on':'off'}"></span>${u.status}</td>
+      <td><button onclick="openUser('${esc(u.id)}')">详情</button>
+      <button class="${u.status==='active'?'danger':''}" onclick="toggleUserById('${esc(u.id)}','${u.status}')">
+      ${u.status==='active'?'禁用':'启用'}</button></td></tr>`).join('') ||
+      '<tr><td colspan="6" class="muted">无数据</td></tr>';
+    renderPager('u-pager', d.total, 20, page, loadUsers);
+  } catch(e){ toast(e.message, true); }
+}
+function renderPager(id, total, size, page, fn){
+  const pages = Math.max(1, Math.ceil(total/size));
+  document.getElementById(id).innerHTML =
+    `<button ${page<=1?'disabled':''} onclick="${fn.name}(${page-1})">‹</button>` +
+    ` <span class="muted">${page} / ${pages} · 共 ${total}</span> ` +
+    `<button ${page>=pages?'disabled':''} onclick="${fn.name}(${page+1})">›</button>`;
+}
+async function openUser(id){
+  try {
+    curUser = await api('/users/' + id);
+    document.getElementById('ud-title').textContent = `用户 ${curUser.id} (${curUser.name||curUser.email||''})`;
+    document.getElementById('ud-info').innerHTML = `
+      <div><span>邮箱</span>${esc(curUser.email)||'—'}</div>
+      <div><span>名称</span>${esc(curUser.name)||'—'}</div>
+      <div><span>钱包</span>${esc(curUser.wallet_addr)||'—'}</div>
+      <div><span>状态</span><span class="dot ${curUser.status==='active'?'on':'off'}"></span>${curUser.status}</div>
+      <div><span>创建</span>${fmtTime(curUser.created_at)}</div>`;
+    const btn = document.getElementById('ud-toggle');
+    btn.textContent = curUser.status==='active' ? '禁用' : '启用';
+    btn.className = curUser.status==='active' ? 'danger' : '';
+    document.getElementById('ud-roles').innerHTML = (curUser.roles||[]).map(r=>
+      `<span class="tag x" onclick="revokeRole('${esc(r)}')">${esc(r)} ×</span>`).join('') || '<span class="muted small">无</span>';
+    document.getElementById('ud-perms').innerHTML = (curUser.direct_permissions||[]).map(p=>
+      `<span class="tag">${esc(p.permission)}${p.expires_at?` <span class="muted">过期 ${fmtTime(p.expires_at)}</span>`:''}
+       <a onclick="revokePerm('${esc(p.permission)}')" style="cursor:pointer;color:var(--danger)">撤销</a></span>`).join('') || '<span class="muted small">无</span>';
+    document.getElementById('ud-sessions').innerHTML = (curUser.sessions||[]).map(s=>
+      `<div class="row" style="padding:4px 0"><span class="muted small" style="width:200px">${esc(s.device)||'—'}</span>
+       <span class="small">创建 ${fmtTime(s.created_at)} · 到期 ${fmtTime(s.expires_at)}</span>
+       <div class="spacer"></div><button class="danger" onclick="revokeSession('${esc(s.id)}')">下线</button></div>`).join('') || '<span class="muted small">无活跃会话</span>';
+    // 角色下拉
+    const roles = await api('/roles');
+    document.getElementById('ud-role-sel').innerHTML = roles.roles.map(r=>
+      `<option value="${esc(r.id)}">${esc(r.id)}</option>`).join('');
+    document.getElementById('page-users').classList.add('hidden');
+    document.getElementById('page-user-detail').classList.remove('hidden');
+  } catch(e){ toast(e.message, true); }
+}
+async function toggleUser(){ await toggleUserById(curUser.id, curUser.status); openUser(curUser.id); }
+async function toggleUserById(id, status){
+  try { await api(`/users/${id}/${status==='active'?'disable':'enable'}`, {method:'POST'});
+    toast('ok'); loadUsers(uPage); } catch(e){ toast(e.message, true); }
+}
+async function delUser(){
+  if (!confirm('删除该用户？（级联删角色/会话，保留审计）')) return;
+  try { await api('/users/' + curUser.id, {method:'DELETE'}); toast('已删除'); nav('users'); }
+  catch(e){ toast(e.message, true); }
+}
+async function grantRole(){
+  try { await api(`/users/${curUser.id}/roles`, {method:'POST', body: JSON.stringify({role: document.getElementById('ud-role-sel').value})});
+    toast('ok'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+async function revokeRole(r){
+  try { await api(`/users/${curUser.id}/roles/${encodeURIComponent(r)}`, {method:'DELETE'});
+    toast('ok'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+async function grantPerm(){
+  const p = document.getElementById('ud-perm').value.trim();
+  if (!p) return;
+  const exp = document.getElementById('ud-perm-exp').value.trim();
+  try { await api(`/users/${curUser.id}/permissions`, {method:'POST', body: JSON.stringify({permission:p, expires_at: exp||null})});
+    toast('ok'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+async function revokePerm(p){
+  try { await api(`/users/${curUser.id}/permissions/${encodeURIComponent(p)}`, {method:'DELETE'});
+    toast('ok'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+async function revokeSession(id){
+  try { await api('/logout', {method:'POST', body: JSON.stringify({refresh_token:id})});
+    toast('ok'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+async function logoutAll(){
+  try { await api('/logout', {method:'POST', body: '{}'});
+    toast('已下线全部会话'); openUser(curUser.id); } catch(e){ toast(e.message, true); }
+}
+
+// ---- 角色 ----
+async function loadRoles(){
+  try {
+    const d = await api('/roles');
+    document.getElementById('r-list').innerHTML = d.roles.map(r=>`
+      <div class="nav-item ${curRole===r.id?'active':''}" onclick="selectRole('${esc(r.id)}')">
+        ${esc(r.id)} ${r.is_builtin?'<span class="muted small">内置</span>':''}</div>`).join('');
+    if (curRole && d.roles.some(r=>r.id===curRole)) renderRoleDetail(d.roles.find(r=>r.id===curRole), d);
+    else if (d.roles.length) selectRole(d.roles[0].id);
+    else document.getElementById('r-detail').innerHTML = '<span class="muted">无角色</span>';
+  } catch(e){ toast(e.message, true); }
+}
+function selectRole(id){ curRole = id; loadRoles(); }
+async function renderRoleDetail(role, all){
+  const perms = await api('/permissions');
+  const byApp = {};
+  perms.permissions.forEach(p=>{ (byApp[p.app] = byApp[p.app]||[]).push(p); });
+  const has = new Set(role.permissions||[]);
+  document.getElementById('r-detail').innerHTML = `
+    <div class="row" style="margin-bottom:10px"><b>权限点（${esc(role.id)}）</b><div class="spacer"></div>
+      <button class="danger" ${role.is_builtin?'disabled':''} onclick="deleteRole('${esc(role.id)}')">删除角色</button></div>
+    ${Object.entries(byApp).map(([app, list])=>`
+      <div class="small muted" style="margin:8px 0 4px">${esc(app)} (${list.length})</div>
+      ${list.map(p=>`<label class="row" style="padding:3px 0;cursor:pointer">
+        <input type="checkbox" data-perm="${esc(p.id)}" ${has.has(p.id)?'checked':''}>
+        <span>${esc(p.id)}</span> <span class="muted">${esc(p.description||'')}</span></label>`).join('')}`).join('')}
+    <div class="row" style="margin-top:12px">
+      <input id="rd-newperm" placeholder="新权限点 app:resource:action" style="width:260px">
+      <button onclick="addPermRow()">+ 添加权限点</button>
+      <div class="spacer"></div>
+      <button class="primary" onclick="saveRole()">保存</button></div>
+    <div id="rd-extra"></div>`;
+}
+function addPermRow(){
+  const v = document.getElementById('rd-newperm').value.trim();
+  if (!v) return;
+  const box = document.getElementById('r-detail');
+  box.insertAdjacentHTML('beforeend',
+    `<label class="row" style="padding:3px 0"><input type="checkbox" data-perm="${esc(v)}" checked>
+     <span>${esc(v)}</span> <span class="muted small">（未注册，保存时自动注册）</span></label>`);
+}
+async function saveRole(){
+  const checked = [...document.querySelectorAll('#r-detail input[data-perm]:checked')].map(i=>i.dataset.perm);
+  try {
+    for (const p of checked) {
+      if (!p.includes(':')) continue;
+      await api('/permissions', {method:'POST', body: JSON.stringify({id:p, app:p.split(':')[0]})}).catch(()=>{});
+    }
+    await api('/roles/' + curRole, {method:'PUT', body: JSON.stringify({permissions: checked})});
+    toast('已保存'); loadRoles();
+  } catch(e){ toast(e.message, true); }
+}
+function showNewRole(){ document.getElementById('nr-card').classList.toggle('hidden'); }
+async function createRole(){
+  const id = document.getElementById('nr-id').value.trim();
+  const name = document.getElementById('nr-name').value.trim();
+  if (!id || !name) return;
+  try { await api('/roles', {method:'POST', body: JSON.stringify({id, name})});
+    toast('已创建'); document.getElementById('nr-card').classList.add('hidden');
+    curRole = id; loadRoles(); } catch(e){ toast(e.message, true); }
+}
+async function deleteRole(id){
+  if (!confirm('删除角色 ' + id + '？')) return;
+  try { await api('/roles/' + id, {method:'DELETE'}); toast('已删除'); curRole=null; loadRoles(); }
+  catch(e){ toast(e.message, true); }
+}
+
+// ---- 审计 ----
+async function loadAudit(page){
+  aPage = page;
+  try {
+    const params = new URLSearchParams({page:String(page), size:'20'});
+    const u = document.getElementById('a-user').value.trim(); if (u) params.set('user', u);
+    const a = document.getElementById('a-action').value; if (a) params.set('action', a);
+    const f = document.getElementById('a-from').value; if (f) params.set('from', f + 'T00:00:00Z');
+    const t = document.getElementById('a-to').value; if (t) params.set('to', t + 'T23:59:59Z');
+    const d = await api('/audit?' + params);
+    // 动作下拉填充
+    const sel = document.getElementById('a-action');
+    const actions = [...new Set(d.items.map(i=>i.action))];
+    if (sel.options.length <= 1) actions.forEach(a=>sel.add(new Option(a, a)));
+    document.getElementById('a-body').innerHTML = d.items.map(i=>`
+      <tr><td class="small">${fmtTime(i.created_at)}</td><td class="small">${esc(i.user_id)||'—'}</td>
+      <td>${esc(i.action)}</td><td class="small muted">${esc(i.detail||'')}</td><td class="small">${esc(i.ip)||''}</td></tr>`).join('') ||
+      '<tr><td colspan="5" class="muted">无数据</td></tr>';
+    renderPager('a-pager', d.total, 20, page, loadAudit);
+  } catch(e){ toast(e.message, true); }
+}
+
+// ---- 设置 ----
+async function loadSettings(){
+  try {
+    const jwks = await fetch('/jwks').then(r=>r.json());
+    const d = await api('/users?size=1'); // 触发鉴权确认
+    document.getElementById('st-tokens').innerHTML = `
+      <div><span>access 寿命</span>15 分钟（RS256 自包含 JWT）</div>
+      <div><span>refresh 寿命</span>30 天（不透明串，轮换 + 重放检测）</div>
+      <div><span>吊销</span>登出/禁用即时（黑名单）；角色变更 ≤15min（快照）</div>`;
+    document.getElementById('st-keys').innerHTML = jwks.keys.map(k=>
+      `<span class="tag">kid: ${esc(k.kid)}</span>`).join('') +
+      ` <span class="muted small">（JWKS 公钥集，下游本地验签）</span>`;
+    const perms = await api('/permissions');
+    document.getElementById('st-perms').innerHTML = perms.permissions.map(p=>
+      `<span class="tag">${esc(p.id)} <span class="muted">${esc(p.description||'')}</span></span>`).join('') ||
+      '<span class="muted small">尚未注册权限点</span>';
+  } catch(e){ toast(e.message, true); }
+}
+async function registerPerm(){
+  const id = document.getElementById('st-perm').value.trim();
+  if (!id) return;
+  try { await api('/permissions', {method:'POST', body: JSON.stringify({
+    id, app: id.split(':')[0], description: document.getElementById('st-perm-desc').value.trim()})});
+    toast('已注册'); loadSettings(); } catch(e){ toast(e.message, true); }
+}
+
+// 未登录时显示登录层
+if (!token) document.getElementById('login-overlay').style.display = 'flex';
+else enter();
+</script>
+</body>
+</html>

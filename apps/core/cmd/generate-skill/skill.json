@@ -1,0 +1,57 @@
+{
+  "name": "generate",
+  "version": "1.0.0",
+  "description": "LLM 生成中文社媒推文：基于检索到的知识与主题，生成一条简洁吸引人的中文推文（仅输出正文）。",
+  "owner": "workflow",
+  "runtime": "go",
+  "type": "service",
+  "addr": "http://127.0.0.1:9501",
+  "image": "workflow:generate-skill",
+  "input_schema": {
+    "type": "object",
+    "required": ["topic", "platform", "query"],
+    "properties": {
+      "topic": {
+        "type": "string",
+        "description": "推文主题/关键词"
+      },
+      "platform": {
+        "type": "string",
+        "description": "目标平台，如 x / xiaohongshu / reddit"
+      },
+      "query": {
+        "type": "string",
+        "description": "补充查询/上下文"
+      },
+      "docs": {
+        "type": ["array", "null"],
+        "items": { "type": "string" },
+        "description": "检索到的参考资料正文（可选）"
+      },
+      "sources": {
+        "type": ["array", "null"],
+        "items": { "type": "string" },
+        "description": "对应来源链接（可选）"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["ok"],
+    "properties": {
+      "ok": { "type": "boolean" },
+      "reason": { "type": "string" },
+      "content": { "type": "string" },
+      "sources": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  },
+  "limits": {
+    "timeout_sec": 120,
+    "rate_per_min": 10,
+    "max_concurrency": 2
+  },
+  "permissions": null
+}

@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-01",
+  "region": "intl",
+  "product": "network",
+  "source": "reddit",
+  "source_ref": "r/ethdev/thread-1001",
+  "url": "https://reddit.com/r/ethdev/comments/1001",
+  "author": "user-001",
+  "excerpt": "Infura 把我限速了，每天 429 刷屏，有替代的 RPC 方案吗？我们是个小团队，预算有限，不想自己跑全节点。",
+  "found_at": "2026-10-02T09:14:00Z"
+}

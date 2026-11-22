@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# ci-runner（S1 全量 CI，docs/plan/S1-进化闭环.md §3.6）
+#
+# evolve-driver 经 docker API 起本镜像跑 /hacks/ci-runner.sh <task_no>：
+#   go build ./...（契约）+ go test ./...（gotestsum → JUnit XML）
+#   + .venv/bin/python -m pytest（apps/ 下 python 项目，.venv 由 evolve-driver 拷入 worktree → JUnit XML）
+# 仓库 worktree 挂 /work（只读）；JUnit XML 落 ci-cache 卷（/cache/ci）。
+FROM golang:1.26
+WORKDIR /ci
+# go module 缓存（构建期预下载，CI 运行期 go mod download 秒级命中；主模块已迁 apps/core）
+COPY apps/core/go.mod apps/core/go.sum ./
+RUN go mod download
+# python + uv（uv run --no-sync pytest）
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+# gotestsum：go test -json → JUnit XML
+RUN go install gotest.tools/gotestsum@v1.13.0   # 模块已迁移至 gotest.tools（仓库 gotestyourself/gotestsum）；v1.11 的旧 x/tools 无法在 Go 1.26 下编译
+COPY apps/core/hacks/ci-runner.sh /hacks/ci-runner.sh
+RUN chmod +x /hacks/ci-runner.sh
+ENTRYPOINT ["/hacks/ci-runner.sh"]

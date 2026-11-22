@@ -1,0 +1,13 @@
+-- 权限收口（以 root 账号执行：bootstrap.sh 专门处理本文件）。
+--
+-- 目标：audit_logs 只增不删（S1 §3.5）。
+-- ⚠️ 语义说明（MySQL 与 MariaDB 不同）：
+--   MySQL 权限按"各级并集"生效——库级 ALL 已含 DELETE/DROP，表级
+--   GRANT SELECT, INSERT 只能"加权限"，无法"减权限"（已实测验证）。
+--   因此本 GRANT 在 MySQL 9.x 下不产生实际限制，仅作为意图声明
+--   （若未来切 MariaDB 则自动生效）。
+--   真正生效的护栏（应用层）：
+--     1. 无任何删除 API / 无 UI 删除入口（approvals/audit 路由只读+决策）；
+--     2. audit 每日清理仅 DROP 过期月分区（root 侧调度，保留 180 天）；
+--     3. 若需 DB 层硬隔离，须为 audit 写入另设专用账号（当前未做，记录为已知残余风险）。
+GRANT SELECT, INSERT ON `workflow`.audit_logs TO 'workflow'@'%';

@@ -1,0 +1,21 @@
+# S1 全量 CI 镜像（docs/plan/S1-进化闭环.md §3.6，deploy/Dockerfile.ci）：
+# evolve-driver 经 docker API 起本镜像跑 /hacks/ci-runner.sh <task_no>（本服务只用于
+# 构建/保留镜像与卷声明）；也可手工一次性运行：
+#   docker compose --profile tools run ci-runner EV-20260928-001
+# ci-cache 卷：JUnit XML（<task_no>-*.xml）+ 审核报告（<task_no>.review.json）
+services:
+  ci-runner:
+    build:
+      context: ../../../
+      dockerfile: deploy/Dockerfile.ci
+    image: computeflux/ci-runner:latest
+    container_name: ci-runner
+    profiles: ["tools"]
+    networks: [workflow-net]
+    volumes:
+      - ../../../:/work:ro
+      - workflow_ci-cache:/cache/ci
+
+volumes:
+  workflow_ci-cache:
+    name: workflow_ci-cache

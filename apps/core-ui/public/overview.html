@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overview · 系统概览</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #000;
+        --surface: #000;
+        --border: #333;
+        --muted: rgba(255, 255, 255, 0.5);
+        --primary: #fff;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--primary);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 64px 20px 40px;
+      }
+      header { text-align: center; margin-bottom: 48px; }
+      header h1 {
+        font-size: 14px;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      header p { margin-top: 10px; font-size: 22px; font-weight: 600; }
+
+      .grid {
+        width: 100%;
+        max-width: 960px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 28px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .card:hover { background: #fff; color: #000; border-color: #fff; }
+      .card .icon { display: flex; }
+      .card .icon svg { width: 26px; height: 26px; }
+      .card .name { font-size: 18px; font-weight: 700; }
+      .card .desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+      .card .url {
+        margin-top: auto;
+        padding-top: 14px;
+        font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+        font-size: 13px;
+        word-break: break-all;
+        border-top: 1px solid var(--border);
+      }
+
+
+      footer { margin-top: 48px; font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Overview</h1>
+      <p>系统概览</p>
+    </header>
+
+    <main class="grid">
+      <a class="card" href="#" data-port="5173" target="_blank" rel="noreferrer">
+        <span class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="8" height="8" x="3" y="3" rx="2" />
+            <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+            <rect width="8" height="8" x="13" y="13" rx="2" />
+          </svg>
+        </span>
+        <span class="name">Workflow</span>
+        <span class="desc">业务工作流与管理后台（board）</span>
+        <span class="url"></span>
+      </a>
+      <a class="card" href="#" data-port="8000" target="_blank" rel="noreferrer">
+        <span class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="m8 9 3 3-3 3" />
+            <path d="M13 15h4" />
+          </svg>
+        </span>
+        <span class="name">合约控制台</span>
+        <span class="desc">合约部署与交互控制台</span>
+        <span class="url"></span>
+      </a>
+      <a class="card" href="#" data-port="8002" target="_blank" rel="noreferrer">
+        <span class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+        </span>
+        <span class="name">链上监控</span>
+        <span class="desc">链上数据与事件监控</span>
+        <span class="url"></span>
+      </a>
+    </main>
+
+    <footer id="host"></footer>
+
+    <script>
+      // 自动使用当前访问的主机名；通过 file:// 打开时回退为 xxxx
+      const host = location.hostname && location.protocol.startsWith("http") ? location.hostname : "xxxx";
+      document.querySelectorAll(".card").forEach((card) => {
+        const port = card.dataset.port;
+        const url = `http://${host}:${port}/`;
+        card.href = url;
+        const urlEl = card.querySelector(".url");
+        if (urlEl) urlEl.textContent = url;
+      });
+      document.getElementById("host").textContent = `host: ${host}`;
+    </script>
+  </body>
+</html>

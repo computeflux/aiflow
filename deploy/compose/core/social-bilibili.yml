@@ -1,0 +1,39 @@
+# social-bilibili — B站 MCP server（apps/social 源码 bilibili/ 构建；MCP Streamable HTTP）
+# 与 social（小红书）同基座：同一 Dockerfile 的 bilibili-mcp target（playwright-go +
+# 构建期固化的 Chromium）。登录态（<account>_bilibili_cookies.json）持久化在
+# ./data/bilibili 卷（容器内 /app/data/cookies，config.docker.yaml 的 cookie_dir）。
+# 端口 18666 仅 workflow-net 内部（不发布到宿主，与 social 18060 一致的最小暴露策略）。
+services:
+  social-bilibili:
+    image: social-bilibili:latest
+    build:
+      context: ../../../apps/social
+      dockerfile: Dockerfile
+      target: bilibili-mcp
+    container_name: social-bilibili
+    restart: always
+    environment:
+      # MCP 端点鉴权 Bearer Token（config.Load 读 BILIBILI_AUTH_TOKEN，非回环监听必填）。
+      # 用 :? 强制显式配置，无弱默认值——与 social.yml 的 SOCIAL_AUTH_TOKEN 约定一致，
+      # 避免容器以无鉴权方式暴露到 workflow-net（同网段任意容器可操作已登录 B 站账号）。
+      # 插值来源是 deploy/.env（compose 层变量，见 deploy/README.md），不是仓库根 .env。
+      BILIBILI_AUTH_TOKEN: ${BILIBILI_AUTH_TOKEN:?BILIBILI_AUTH_TOKEN 未配置（在 deploy/.env 设置，见 deploy/.env.example）}
+    networks: [workflow-net]
+    volumes:
+      # 登录态持久卷（bind mount，与 social.yml 的 ./data 约定一致）：
+      # <account>_bilibili_cookies.json + accounts.json 落此目录（容器内 /app/data，
+      # config.docker.yaml 的 cookie_dir=/app/data/cookies）。cookie 子目录在首次登录
+      # 时由 auth.SaveAccount 的 os.MkdirAll 自动创建，服务启动不依赖它存在。
+      - ../../../apps/social/data/bilibili:/app/data
+    # /health 无鉴权探活端点（server.go，GET-only，只报告进程存活不返回登录态数据）；
+    # trixie-slim 自带 wget（不用 --spider：它发 HEAD，/health 只注册了 GET）。
+    # 浏览器池在启动时同步初始化（playwright 拉起 2 个 chromium），start_period 需覆盖首启时间。
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18666/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    mem_limit: 2g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

@@ -1,0 +1,19 @@
+history.enableTransitionHistory:
+    - value: false
+history.enableChasm:
+    - value: false
+activity.enableStandalone:
+    - value: false
+frontend.workerHeartbeatsEnabled:
+    - value: true
+# S2 混合编排硬配置（docs/plan/S2-混合编排.md §3.1，总纲 §6.4）。
+# namespace 默认值仅对新建的 namespace 生效（agent-prod）；存量 default 不受影响。
+# "最大尝试 3" 无 namespace 级配置，由各 workflow 的 RetryPolicy 落实。
+frontend.namespaceDefaults.workflowTaskTimeout:
+    - value: 10s
+frontend.namespaceDefaults.workflowExecutionTimeout:
+    - value: 24h
+frontend.namespaceDefaults.activityTaskTimeout:
+    - value: 2m
+frontend.namespaceDefaults.stickyExecutorHeartbeatTimeout:
+    - value: 30s

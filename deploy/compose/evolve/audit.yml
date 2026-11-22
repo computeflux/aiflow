@@ -1,0 +1,37 @@
+# S1 审计巡检（docs/plan/S1-进化闭环.md §3.3）：
+# 进程内 30 分钟 ticker（AUDIT_INTERVAL_SEC），skill_runs + error_logs 巡检
+# → 报告 JSON（/cache/audit 卷）+ 严重问题时生成审批单/进化单（只生成，不自动改流量）；
+# 每日 audit_logs 过期月分区清理（§3.5）。
+services:
+  audit:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: audit
+    image: computeflux/audit:latest
+    container_name: audit
+    # distroless 默认 USER nonroot，无法写入 root 属主的 named volume（报告目录）
+    user: root
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    volumes:
+      - ../../../.env:/app/.env:ro
+      - audit-cache:/cache/audit
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8120"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  audit-cache:
+    name: workflow_audit-cache

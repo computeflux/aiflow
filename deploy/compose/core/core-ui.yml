@@ -1,0 +1,32 @@
+# Core-UI（board 前端合并体：单容器单端口 :5181，路径入口
+# /ops/ 运维中心 + /product/ 产品与任务 + /content/ 内容生产 + /email/ 邮件
+# React+Vite 单入口构建（deploy/Dockerfile.core-ui，一次产出 dist/，整体拷入容器
+# /usr/share/nginx/html/，四个板块由前端路由区分，见 apps/core-ui/src/main.tsx）
+# + nginx 托管（deploy/nginx/core-ui.conf：/ 302 → /ops/，各入口 SPA 回退，
+# 同源代理 /api/ /mailer/ /jaeger/）
+# 原 board-ops :5181 / board-product :5184 / board-content :5182 / board-email :5183
+# 四服务已全部合并（2026-10-10 二次重组：单容器单端口）；
+# /review/ 板块已退役（2026-11-20），OCR 审核入口 = /ops/ocr-reviews
+services:
+  core-ui:
+    build:
+      context: ../../../
+      dockerfile: deploy/Dockerfile.core-ui
+    image: computeflux/core-ui:latest
+    container_name: core-ui
+    restart: always
+    ports:
+      - "5181:80"
+    networks: [workflow-net]
+    depends_on:
+      workflow-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ops/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

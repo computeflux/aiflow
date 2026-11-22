@@ -1,0 +1,29 @@
+# Generate 技能（LLM 生成中文社媒推文；:9501 仅内部网络，由 skillgateway HTTP 调用）
+services:
+  generate-skill:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: generate-skill
+    image: computeflux/generate-skill:latest
+    container_name: generate-skill
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    volumes:
+      - ../../../.env:/app/.env:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:9501"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]

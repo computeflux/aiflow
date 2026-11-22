@@ -1,0 +1,36 @@
+# PyCrawler（X/Reddit/GitHub/小红书抓取 worker；Temporal activity + MySQL 落库）
+# 复用 apps/pycraper 既有 Dockerfile；env_file 后 environment 覆盖端点为容器名 DNS
+services:
+  pycraper:
+    image: pycraper:latest
+    build:
+      context: ../../../apps/pycraper
+      dockerfile: Dockerfile
+    container_name: pycraper
+    restart: always
+    env_file: ../../../apps/pycraper/.env
+    environment:
+      TEMPORAL_HOST_PORT: temporal:7233
+      MYSQL_HOST: workflow-mysql
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: pycraper
+    networks: [workflow-net]
+    volumes:
+      - ../../../apps/pycraper/config:/app/config:ro
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+    # debian slim 无 curl：PID 1（python main）存活检查
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

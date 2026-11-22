@@ -1,0 +1,66 @@
+# Temporal server + DB schema 初始化 + namespace 创建（一次性容器，脚本幂等可重跑）
+services:
+  temporal-admin-tools:
+    image: temporalio/admin-tools:1.31
+    container_name: temporal-admin-tools
+    restart: "on-failure"
+    depends_on:
+      temporal-pg:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${TEMPORAL_PG_USER:-temporal}
+      - POSTGRES_PWD=${TEMPORAL_PG_PASSWORD:-temporal}
+      - POSTGRES_SEEDS=temporal-pg
+    networks: [workflow-net]
+    volumes:
+      - ../../config/temporal/setup-postgres.sh:/setup-postgres.sh:ro
+    entrypoint: ["/bin/sh", "/setup-postgres.sh"]
+    labels: ["part-of=compute-flux-workflow"]
+
+  temporal:
+    image: temporalio/server:1.31
+    container_name: temporal
+    restart: always
+    depends_on:
+      temporal-admin-tools:
+        condition: service_completed_successfully
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${TEMPORAL_PG_USER:-temporal}
+      - POSTGRES_PWD=${TEMPORAL_PG_PASSWORD:-temporal}
+      - POSTGRES_SEEDS=temporal-pg
+      - BIND_ON_IP=0.0.0.0
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/docker.yaml
+    networks: [workflow-net]
+    ports:
+      - "127.0.0.1:7233:7233"   # 仅本地工具
+    volumes:
+      - ../../config/temporal/docker.yaml:/etc/temporal/config/dynamicconfig/docker.yaml:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 60
+    mem_limit: 2g
+    cpus: 2.0
+    labels: ["part-of=compute-flux-workflow"]
+
+  temporal-create-namespace:
+    image: temporalio/admin-tools:1.31
+    container_name: temporal-create-namespace
+    restart: "on-failure"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - DEFAULT_NAMESPACE=default
+    networks: [workflow-net]
+    volumes:
+      - ../../config/temporal/create-namespace.sh:/create-namespace.sh:ro
+    entrypoint: ["/bin/sh", "/create-namespace.sh"]
+    labels: ["part-of=compute-flux-workflow"]

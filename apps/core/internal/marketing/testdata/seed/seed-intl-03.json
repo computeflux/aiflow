@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-03",
+  "region": "intl",
+  "product": "network",
+  "source": "x",
+  "source_ref": "post-3001",
+  "url": "https://x.com/i/status/3001",
+  "author": "user-003",
+  "excerpt": "海外团队用国内卡付 RPC 账单一直失败，试了三张卡都不行。有没有支持国际卡的节点服务？",
+  "found_at": "2026-10-04T08:05:00Z"
+}

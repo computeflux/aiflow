@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-06",
+  "region": "intl",
+  "product": "network",
+  "source": "github",
+  "source_ref": "issue-6001",
+  "url": "https://github.com/defi-sdk/multi-chain-kit/issues/6001",
+  "author": "user-006",
+  "excerpt": "我们的 DApp 要同时支持 ETH、BSC、Polygon 三条链，现在每条链各接一家 RPC 供应商，账单和 SDK 都乱。有没有一个入口多链都通的？",
+  "found_at": "2026-10-07T10:30:00Z"
+}

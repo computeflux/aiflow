@@ -1,0 +1,27 @@
+# Jaeger（all-in-one；替代 hacks/otel.sh 单容器）
+# QUERY_BASE_PATH=/jaeger：支持经 board nginx /jaeger/ 子路径同源代理；仅内部网络，不发布宿主端口
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    restart: always
+    environment:
+      QUERY_BASE_PATH: /jaeger
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks: [workflow-net]
+    volumes:
+      - jaeger-data:/var/lib/jaeger
+    # 镜像内无 curl/wget，用 PID 1 存活检查做 liveness
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  jaeger-data:
+    name: workflow_jaeger-data

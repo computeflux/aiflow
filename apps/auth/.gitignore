@@ -1,0 +1,4 @@
+bin/
+logs/
+auth_jwt.key
+*.log

@@ -1,0 +1,58 @@
+# sslmon(项目指标监控) — Docker Compose 部署
+# 用法: docker compose up -d --build
+# 监控内容: 服务健康(HTTP 探测) + TLS 证书状态, 所有配置数据存 MySQL monitor_config 表
+# (首次启动播种内置默认, 面板设置页可读写, 30s 热加载, 数据库不可达时不启动);
+# 可用环境变量 SSL_HOSTS 覆盖证书监控主机列表(逗号分隔, 如 "a.com,b.com")
+services:
+  sslmon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sslmon:latest
+    container_name: sslmon
+    restart: unless-stopped
+    environment:
+      SSL_HTTP: "1"
+      # 容器内固定 8003, 宿主机端口由下方 ports 的 ${SSL_HTTP_PORT} 控制
+      SSL_HTTP_PORT: 8003
+      SSL_HOSTS: ${SSL_HOSTS:-}
+      # 服务健康检查时替换 xxxx 占位符的主机地址, 默认走 host-gateway 探测宿主机服务
+      MONITOR_HOST: ${MONITOR_HOST:-host.docker.internal}
+      # 部署控制(面板重启/重编译其他应用): 等价宿主机 root 权限, 务必设置强随机 token
+      MONITOR_DEPLOY_TOKEN: ${MONITOR_DEPLOY_TOKEN:-}
+      # 配置数据库 DSN(留空则用内置默认: dev-workflow.computeflux.ai workflow 库, 见 dbconfig.go)
+      MONITOR_DB_DSN: ${MONITOR_DB_DSN:-}
+      # 证书续签(Let's Encrypt DNS-01, 见 renew.go): 阿里云 DNS AccessKey(建议 RAM 用户, 仅 DNS 记录读写权限);
+      # 取值自 apps/metrics/.env(docker compose 项目目录), 未设置时续签接口返回"未配置阿里云 AccessKey"
+      ALICLOUD_ACCESS_KEY: ${ALICLOUD_ACCESS_KEY:-}
+      ALICLOUD_SECRET_KEY: ${ALICLOUD_SECRET_KEY:-}
+    volumes:
+      # 部署控制需要访问宿主机 docker daemon(见 deploy.go)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 仓库只读挂载(同路径): 用于部署脚本存在性校验, 脚本本身在宿主机执行
+      - "${MONITOR_REPO:-/home/wetee/work/cathome/workflow}:${MONITOR_REPO:-/home/wetee/work/cathome/workflow}:ro"
+      # 已签发证书 + ACME 账号(持久化, 跨重建保留)
+      - metrics_certs:/app/certs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${SSL_HTTP_PORT:-19003}:8003"
+    networks:
+      - default
+      # 统一 compose 内网：用容器名直连 workflow-mysql（MySQL 仅绑宿主机 127.0.0.1，
+      # host.docker.internal 走网桥网关不通；见 .env 的 MONITOR_DB_DSN）
+      - workflow-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8003/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  metrics_certs:
+
+networks:
+  workflow-net:
+    external: true
+    name: workflow-net

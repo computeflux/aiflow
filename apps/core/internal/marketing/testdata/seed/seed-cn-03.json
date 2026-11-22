@@ -1,0 +1,11 @@
+{
+  "id": "seed-cn-03",
+  "region": "cn",
+  "product": "network",
+  "source": "zhihu",
+  "source_ref": "question-13001",
+  "url": "https://zhihu.com/question/13001",
+  "author": "user-013",
+  "excerpt": "金融客户问我们：数据出境合规怎么解决？我们的模型推理数据现在全部走海外节点，审计过不了。有没有数据不出境的服务方案？",
+  "found_at": "2026-10-04T09:45:00Z"
+}

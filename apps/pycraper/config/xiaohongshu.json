@@ -1,0 +1,6 @@
+{
+  "_comment": "MK-00 已定案：小红书 MCP server = xpzouying/xiaohongshu-mcp（HTTP streamableHttp :18060/mcp）。工具名 search_feeds/publish_content（非 search_notes/publish_note）。mcp_command 现为 echo=禁用；启用时填 stdio↔HTTP 桥命令，如 npx -y mcp-remote http://<mcp-host>:18060/mcp（详见 docs/marketing/plan/README.md §4.2）。",
+  "mcp_command": "echo",
+  "fetch_tool": "search_feeds",
+  "publish_tool": "publish_content"
+}

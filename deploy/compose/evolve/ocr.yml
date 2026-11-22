@@ -1,0 +1,42 @@
+# S1 reviewer Agent 容器（open-code-review，docs/plan/S1-进化闭环.md §3.7）：
+# 历史：evolve-driver 曾 docker exec 本容器跑 /agents/ocr/adapter.sh；
+# 2026-10-17 起 reviewer adapter 为 Go 二进制 /bin/agent-ocr（源码 internal/agentcli），
+# 在 evolve-driver 容器内直接 exec 宿主 ocr CLI（HOME=/host，凭据读 ~/.opencodereview）。
+# 本容器保留作 ocr 运行时环境/会话数据（~/.ocr named volume），兼容旧调用方式。
+# 仓库根挂 /work（只读）：review 的 workdir 为 /work/<EVOLVE_CACHE_DIR>/<task_no>。
+services:
+  ocr:
+    build:
+      context: ../../../
+      dockerfile: deploy/Dockerfile.ocr
+    image: computeflux/ocr:latest
+    container_name: ocr
+    restart: always
+    # 凭据文件需从 agents/ocr/config/env.example 复制生成；未生成时容器照常启动（reviewer 调用会失败）
+    env_file:
+      - path: ../../../apps/core/agents/ocr/config/env
+        required: false
+    environment:
+      OCR_SESSION_DIR: /root/.ocr
+    networks: [workflow-net]
+    volumes:
+      - ocr-data:/root/.ocr
+      # ocr config（~/.opencodereview）也挂卷：容器重建不丢 provider 配置
+      - ocr-config:/root/.opencodereview
+      - ../../../:/work:ro
+    # 无常驻服务（供 exec 调用）：探活 = ocr CLI 可用
+    healthcheck:
+      test: ["CMD-SHELL", "command -v ocr >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  ocr-data:
+    name: workflow_ocr-data
+  ocr-config:
+    name: workflow_ocr-config

@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-02",
+  "region": "intl",
+  "product": "network",
+  "source": "github",
+  "source_ref": "issue-2041",
+  "url": "https://github.com/defi-sdk/eth-gateway/issues/2041",
+  "author": "user-002",
+  "excerpt": "我们的合约部署工具在欧盟用户那边全部卡在 KYC 审核，两周了还没过。有没有不需要本地 KYC 的 RPC 中转方案？",
+  "found_at": "2026-10-03T11:40:00Z"
+}

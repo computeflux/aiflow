@@ -1,0 +1,33 @@
+# S9 统一工作项流水线（docs/plan/S9-统一工作项流水线.md §7.4/§7.5/§7.7）：
+# 三循环（进程内 ticker，:8130 仅内部网络）：
+#   - 分诊（15min）：未归并 error_logs → 聚簇/去重 → AI 分诊（LLM 不可用 → 规则降级）→ 建 Bug 工作项入队；
+#   - 调度（5min）：重算 queued 分数 → core 旁路 → 取最高分非锁定项领取 → 建 evolve_task（source=work_item）驱动 S1 链 + 饥饿保护；
+#   - 回流（5min）：按 S1 进化单 status 回填工作项状态（shipped/rejected/expired/in_review）+ 回填 error_logs。
+# 只写 work_items / error_logs.work_item_no / evolve_tasks（source=work_item）；不碰运行链路、不改流量。
+#（§12 回滚：docker compose stop work-dispatch 即停自动分诊/调度/回流，退回人工手动领取，已领取进化单不受影响）。
+# 降级：LLM 不可用 → 规则分诊 + triage_degraded 标注（不阻断、不假装智能）。
+# 仅内部网络（:8130 健康探针 + /triage|/dispatch|/feedback 手工端点不发布宿主端口）。
+services:
+  work-dispatch:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: work-dispatch
+    image: computeflux/work-dispatch:latest
+    container_name: work-dispatch
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8130"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.25
+    labels: ["part-of=compute-flux-workflow"]

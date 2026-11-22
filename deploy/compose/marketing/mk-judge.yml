@@ -1,0 +1,33 @@
+# 营销判断服务 HTTP 入口（docs/marketing/plan/P2-判断服务地基.md MK-16/MK-17）：
+# 主流程的壳（flag 分发 + 路由注册），判断主流程本体在 internal/marketing（MK-14）。
+# 路由（:8131 仅内部网络，不发布宿主端口）：
+#   - GET  /healthz    健康探针（compose healthcheck）
+#   - POST /judge      判断主流程（body = JudgeRequest + region/product；缺 region → 400）
+#   - GET  /judge/:id  回放：返回该判断的上下文快照 snapshot
+#   - POST /replay/:id 用原 snapshot 重跑（当前 prompt 版本），便于对比 prompt 改动
+# 边界：不做鉴权网关（内部端口），不做 UI。
+# 镜像 deploy/Dockerfile.go（distroless）；依赖 MySQL（判断/线索落库）；仅内部网络。
+services:
+  mk-judge:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: mk-judge
+    image: computeflux/mk-judge:latest
+    container_name: mk-judge
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8131"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.25
+    labels: ["part-of=compute-flux-workflow"]

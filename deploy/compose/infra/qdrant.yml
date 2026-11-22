@@ -1,0 +1,27 @@
+# Qdrant（RAG 向量库，UI/API :6333/:6334 仅 127.0.0.1，最小化暴露）
+# 数据卷沿用原根 compose 的 named volume（workflow_qdrant-data），切换不丢数据
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.2-unprivileged
+    container_name: workflow-qdrant
+    restart: always
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    networks: [workflow-net]
+    volumes:
+      - qdrant-data:/qdrant/storage
+    # unprivileged 镜像内无 curl/wget/python，用 PID 1 存活检查做 liveness
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  qdrant-data:
+    name: workflow_qdrant-data

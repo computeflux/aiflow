@@ -1,0 +1,36 @@
+# S1 沙箱执行器（docs/plan/S1-进化闭环.md §3.6）：
+# 仅内部网络（:8123 不发布宿主端口）；POST /sandbox/run 起一次性容器跑目标技能单测。
+# 安全参数写死在代码（--network none --memory 1g --cpus 2 --pids-limit 256
+# --read-only --tmpfs /tmp --tmpfs /root/.cache --cap-drop ALL --security-opt no-new-privileges）；
+# 白名单镜像 SANDBOX_ALLOWED_IMAGES（支持 `repo:*` tag 通配：灰度版本容器镜像为版本化 tag，
+# 如 pyreplay:evolve-card-20-1790984255；与 evolve-driver 同口径，见 cmd/sandbox-runner/sandboximg.go）；输出截断 64KB。
+# 经 docker API 连接 sandbox-dind 边车（SANDBOX_DOCKER_HOST=tcp://sandbox-dind:2375）。
+services:
+  sandbox-runner:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: sandbox-runner
+    image: computeflux/sandbox-runner:latest
+    container_name: sandbox-runner
+    # 宿主 docker socket 为 root:docker 组（gid 137）；distroless 默认 nonroot(65532) 无权访问
+    user: "1001:137"
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    volumes:
+      - ../../../.env:/app/.env:ro
+      # 宿主 docker socket（ro）：白名单镜像（pycraper/pyreplay:latest）是宿主本地镜像，
+      # dind 独立镜像库看不到它们，故默认走宿主 daemon（隔离性来自写死的安全参数）。
+      # 若改用 registry 镜像，可切回 SANDBOX_DOCKER_HOST=tcp://sandbox-dind:2375。
+      - /run/docker.sock:/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8123"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]

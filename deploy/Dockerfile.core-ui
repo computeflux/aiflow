@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+# core-ui（board 前端合并体）— node:22 构建 + nginx 托管
+# 2026-10-10 二次重组：标准单入口 React 项目，单容器单端口 :5181。
+# /ops/ /product/ /content/（原 :5182）/ /email/（原 :5183）四个板块由前端路由区分
+#（/review/ 板块已退役，2026-11-20）
+#（apps/core-ui/src/main.tsx，按路由懒加载做代码分割）。
+# npm run build = tsc -b + vite build → 单一 dist/，整体拷入容器
+# /usr/share/nginx/html/（nginx SPA 回退见 deploy/nginx/core-ui.conf）。
+#
+# 构建上下文为仓库根（@wetee/web3auth 是 file: 本地依赖，必须先入上下文）；
+# 共享代码 src/kit（原 board-kit）已随 apps/core-ui 入上下文。
+# nginx 同源代理（见 deploy/nginx/core-ui.conf）：
+#   /api/    → workflow-api:8001
+#   /mailer/ → mailer:8003
+#   /jaeger/ → jaeger:16686
+# 上游用 upstream + zone + resolve 动态解析（upstreams.conf，00- 前缀先加载）：
+# 上游容器重建换 IP 后无需重启，不再 502。
+
+FROM node:22 AS build
+WORKDIR /app
+
+# @wetee/web3auth 是 file: 本地依赖（npm 装成符号链接 → /web3auth），必须先入上下文；
+# 其 types 指向 src/*.ts，tsc -b 会直接类型检查 web3auth 源码 → 需装 web3auth 自身依赖
+COPY apps/web3auth/ /web3auth/
+COPY apps/core-ui/ /core-ui/
+COPY apps/core-ui/package.json apps/core-ui/package-lock.json ./
+RUN cd /web3auth && npm ci --no-audit --no-fund \
+    && cd /app && npm ci --no-audit --no-fund
+COPY apps/core-ui/ .
+# 单入口构建：tsc -b + vite build → dist/（index.html + assets/ + public 文件）
+RUN npm run build
+
+FROM nginx:stable-alpine
+# 移除基镜像默认 server（listen 80 default_server）：core-ui.conf 未声明 default_server，
+# 不删的话 Host 为 localhost/端口 的请求会落到默认 server（静态 404），/api 代理失效
+RUN rm -f /etc/nginx/conf.d/default.conf
+# 00- 前缀：按字典序先于 core-ui.conf 加载（upstream 需先定义）
+COPY deploy/nginx/upstreams.conf /etc/nginx/conf.d/00-upstreams.conf
+COPY deploy/nginx/core-ui.conf /etc/nginx/conf.d/core-ui.conf
+# 单入口静态树（nginx SPA 回退统一指向 /index.html，见 core-ui.conf）
+COPY --from=build /app/dist/ /usr/share/nginx/html/
+EXPOSE 80

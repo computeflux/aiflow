@@ -1,0 +1,24 @@
+# Temporal 状态库（PostgreSQL 15）
+# 数据卷：bind mount 到仓库 cache/pg（原 named volume workflow_temporal-postgres-data 已切换）
+services:
+  temporal-pg:
+    image: postgres:15
+    container_name: temporal-postgresql
+    restart: always
+    environment:
+      POSTGRES_USER: ${TEMPORAL_PG_USER:-temporal}
+      POSTGRES_PASSWORD: ${TEMPORAL_PG_PASSWORD:-temporal}
+      POSTGRES_DB: temporal
+    ports:
+      - "127.0.0.1:5432:5432"   # 仅本地工具
+    networks: [workflow-net]
+    volumes:
+      - ../../../cache/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEMPORAL_PG_USER:-temporal}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

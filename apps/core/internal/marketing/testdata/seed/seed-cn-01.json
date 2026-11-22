@@ -1,0 +1,11 @@
+{
+  "id": "seed-cn-01",
+  "region": "cn",
+  "product": "network",
+  "source": "v2ex",
+  "source_ref": "t-11001",
+  "url": "https://v2ex.com/t/11001",
+  "author": "user-011",
+  "excerpt": "公司想接海外大模型 API，走代理老被墙，一断线整个业务就停。有没有稳定的国内接入方案？",
+  "found_at": "2026-10-02T10:00:00Z"
+}

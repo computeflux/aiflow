@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# S5 部署编排镜像（docs/plan/S5-软件接管与部署编排.md §3.2/§3.3/§3.4）：
+# Go 二进制 + docker CLI（含 compose 插件）+ shell。
+#
+# deployctl / health-patrol 经挂载的 Docker socket 驱动宿主 daemon：
+#   - 静态 compose 服务：docker compose build/up/restart/stop/ps（compose 文件是单一事实来源）；
+#   - 动态版本容器（静态 compose 的唯一例外）：Engine API（internal/dockerapi）。
+# 不纳管资产（external）在 deploy all / 自愈 / 版本管理中零触碰（红线）。
+#
+# 用法（在 deploy/ 下）：
+#   docker compose up -d --build health-patrol
+#   docker compose --profile tools run deployctl deploy all
+
+FROM golang:1.26 AS builder
+WORKDIR /src
+ARG target
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN case "$target" in \
+      deployctl|health-patrol) pkg="./cmd/$target" ;; \
+      *) echo "unknown target: $target" && exit 1 ;; \
+    esac \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app "$pkg"
+
+FROM docker:27-cli
+COPY --from=builder /out/app /bin/app
+ENTRYPOINT ["/bin/app"]

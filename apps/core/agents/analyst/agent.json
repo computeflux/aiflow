@@ -1,0 +1,12 @@
+{
+  "name": "analyst",
+  "role": "analyst",
+  "version": "1.0.0",
+  "protocol": "cli",
+  "entrypoint": "/bin/agent-analyst",
+  "container": "analyst",
+  "workdir_prefix": "/repo",
+  "limits": { "timeout_sec": 1800, "max_files_per_turn": 20 },
+  "permissions": { "write_scope": "none" },
+  "config": { "session_dir": "/host/.pi/agent" }
+}

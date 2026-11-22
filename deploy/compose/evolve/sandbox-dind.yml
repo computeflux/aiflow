@@ -1,0 +1,36 @@
+# S1 沙箱 dind 边车（docker:dind，docs/plan/S1-进化闭环.md §3.6）：
+# sandbox-runner 经 SANDBOX_DOCKER_HOST=tcp://sandbox-dind:2375 连接。
+# 仓库根挂 /work（只读）：dind 守护进程的 bind-mount 路径从自身视角解析，
+# 沙箱容器挂的 <SANDBOX_REPO_PREFIX>/<repo_mount> 即宿主仓库内的 evolve worktree。
+# 按需使用：空闲时可 docker compose stop sandbox-dind（S1 §3.6）；
+# S5 前灰度回滚停版本实例容器也走宿主手动操作。
+services:
+  sandbox-dind:
+    image: docker:dind
+    container_name: sandbox-dind
+    restart: "no"
+    # dind 内跑 docker daemon 需要特权（挂载 cgroup/安全模块）；rootless 宿主下若仍失败，
+    # 退路：sandbox-runner 直连宿主 docker.sock（SANDBOX_DOCKER_HOST=unix:///run/docker.sock，
+    # 隔离性来自写死的安全参数而非嵌套）
+    privileged: true
+    environment:
+      # 默认 DOCKER_TLS_CERTDIR=/certs → TLS 监听 2376；置空后监听 2375（仅内部网络，与 SANDBOX_DOCKER_HOST 一致）
+      DOCKER_TLS_CERTDIR: ""
+    networks: [workflow-net]
+    volumes:
+      - dind-data:/var/lib/docker
+      - ../../../:/work:ro
+    # dind 自带 docker CLI：用 docker version 探活
+    healthcheck:
+      test: ["CMD-SHELL", "docker -H tcp://localhost:2375 version >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 4g
+    cpus: 4.0
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  dind-data:
+    name: workflow_dind-data

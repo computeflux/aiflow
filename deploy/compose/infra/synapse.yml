@@ -1,0 +1,57 @@
+# Matrix Synapse（协作底座；S0 建好容器，S4 启用审批 Bot，见 docs/plan/S4-协作底座.md）
+# 镜像 /start.py 的 run 模式要求 /data/homeserver.yaml 已存在：
+#   synapse-init 一次性容器跑 migrate_config（渲染内置 jinja2 模板 → /data/homeserver.yaml + 签名密钥），
+#   synapse 正常启动。幂等，重启/重建可重跑。
+# 说明：
+#   - sqlite3 单文件库 /data/homeserver.db（named volume，数据不丢）
+#   - 8008 仅内部网络：宿主 8008 当前被 apps/auth 占用，S4 端口规划落地后
+#     加 "8008:8008" 对外（端口总表 docs/plan/evolve-plan.md §3.1）
+#   - 审批 Bot 注册 secret（SYNAPSE_REGISTRATION_SHARED_SECRET）经 deploy/.env 注入
+services:
+  synapse-init:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse-init
+    restart: "no"
+    # 以 root 启动：/start.py 内部 gosu 切到 991 并 chown /data（镜像设计模式）
+    environment:
+      SYNAPSE_SERVER_NAME: ${SYNAPSE_SERVER_NAME:-dev-workflow.computeflux.ai}
+      SYNAPSE_REPORT_STATS: "no"
+      SYNAPSE_NO_TLS: "yes"
+      # 注册保持关闭：模板按 jinja2 真值判断，必须不设置 SYNAPSE_ENABLE_REGISTRATION（设成 "false" 反而为 True）
+      SYNAPSE_REGISTRATION_SHARED_SECRET: ${SYNAPSE_REGISTRATION_SHARED_SECRET}
+    networks: [workflow-net]
+    volumes:
+      - synapse-data:/data
+    command: ["migrate_config"]
+    labels: ["part-of=compute-flux-workflow"]
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: always
+    # 以 root 启动：/start.py 内部 gosu 切到 991（镜像设计模式）
+    environment:
+      SYNAPSE_SERVER_NAME: ${SYNAPSE_SERVER_NAME:-dev-workflow.computeflux.ai}
+      SYNAPSE_REPORT_STATS: "no"
+      SYNAPSE_NO_TLS: "yes"
+      SYNAPSE_REGISTRATION_SHARED_SECRET: ${SYNAPSE_REGISTRATION_SHARED_SECRET}
+    networks: [workflow-net]
+    depends_on:
+      synapse-init:
+        condition: service_completed_successfully
+    volumes:
+      - synapse-data:/data
+    command: ["run"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8008/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]
+
+volumes:
+  synapse-data:
+    name: workflow_synapse-data

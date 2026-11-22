@@ -1,0 +1,10 @@
+# Agent 会话数据与凭据一律不提交
+
+**/config/*
+!**/config/README.md
+
+*.log
+*.env
+session/
+.venv/
+__pycache__/

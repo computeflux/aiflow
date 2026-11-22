@@ -1,0 +1,40 @@
+# Workflow Go Worker（Temporal activity worker；无监听端口）
+services:
+  workflow-go-worker:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: go-worker
+    image: computeflux/workflow-go-worker:latest
+    container_name: workflow-go-worker
+    restart: always
+    env_file: ../../../.env
+    environment:
+      # skill 网关在 workflow-api 容器（internal/activities/skill_bridge.go）
+      SKILL_GATEWAY_URL: http://workflow-api:8001
+      # S2 §3.1：cron workflow 迁到 agent-prod 的 cron 队列（syncCrons 重建 schedule）；
+      # default 旧注册双跑一个版本周期后停旧 cron（S2 §7）
+      CRON_QUEUE_MIGRATED: "true"
+    networks: [workflow-net]
+    volumes:
+      - ../../../.env:/app/.env:ro
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    # 无 HTTP 端口：PID 1 存活检查（distroless 内 /bin/hc proc）
+    healthcheck:
+      test: ["CMD", "/bin/hc", "proc"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

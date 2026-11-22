@@ -1,0 +1,11 @@
+{
+  "id": "seed-intl-08",
+  "region": "intl",
+  "product": "network",
+  "source": "telegram",
+  "source_ref": "group-msg-8001",
+  "url": "https://t.me/s/channel8001",
+  "author": "user-008",
+  "excerpt": "我们在东南亚做支付，用户端调 RPC 延迟 2 秒起步，投诉很多。有没有低延迟的节点接入方案？",
+  "found_at": "2026-10-09T07:55:00Z"
+}

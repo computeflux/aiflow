@@ -1,0 +1,54 @@
+{
+  "host": "xxxx",
+  "services": [
+    {
+      "name": "workflow-ops",
+      "label": "运维中心",
+      "description": "审批/干预/运维/技能/用户（/ops/ 入口）",
+      "url": "http://xxxx:5181/ops/"
+    },
+    {
+      "name": "workflow-product",
+      "label": "产品与任务",
+      "description": "产品情报/工作看板/思维导图（/product/ 入口）",
+      "url": "http://xxxx:5181/product/"
+    },
+    {
+      "name": "workflow-content",
+      "label": "内容生产",
+      "description": "抓取/素材/向量库/社媒生成（/content/ 入口）",
+      "url": "http://xxxx:5181/content/"
+    },
+    {
+      "name": "workflow-email",
+      "label": "邮件",
+      "description": "邮件推广/模板/发信服务商（/email/ 入口）",
+      "url": "http://xxxx:5181/email/"
+    },
+    {
+      "name": "contract-console",
+      "label": "contract",
+      "description": "合约部署与交互控制台",
+      "url": "http://xxxx:8000/"
+    },
+    {
+      "name": "chain-monitor",
+      "label": "monitor",
+      "description": "链上数据与事件监控",
+      "url": "http://xxxx:8002/"
+    },
+    {
+      "name": "metrics-monitor",
+      "label": "metrics",
+      "description": "项目指标监控（服务健康 + TLS 证书）",
+      "url": "http://xxxx:19003/"
+    },
+    {
+      "name": "coder",
+      "label": "coder",
+      "description": "编码 Agent 控制台（pi，Basic Auth）",
+      "url": "https://xiaobai.asyou.me:8443/",
+      "new_window": true
+    }
+  ]
+}

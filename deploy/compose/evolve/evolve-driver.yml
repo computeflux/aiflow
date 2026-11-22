@@ -1,0 +1,56 @@
+# S1 进化执行链编排（docs/plan/S1-进化闭环.md §3.8）：
+# 进程内 1 分钟轮询（EVOLVE_POLL_SEC），**串行 max_concurrency=1**；
+# 流程：git worktree → coder → 范围校验 → reviewer → 沙箱 → CI 全绿 → 审批单。
+# 范围校验：默认只准 apps/*（排除 apps/board*）；**小范围越界允许**——越界文件数 ≤ EVOLVE_SCOPE_ALLOW_FILES
+#（默认 2）且越界改动行数 ≤ EVOLVE_SCOPE_ALLOW_LINES（默认 50）→ 放行（audit action=scope_allow 留痕，
+# reviewer + 人工审批仍把关）；超阈值打回人工 PR。置 0 = 一律不允许越界（退回旧行为）。
+# 绝不 push/merge；所有状态迁移写 audit_logs。
+# 仓库卷挂 /repo（可写，worktree 建于 /repo/<EVOLVE_CACHE_DIR>）；
+# 宿主 home 挂 /host（agent adapter 容器内直接 exec，宿主 npm/go/cargo 工具链经此可用）；
+# 宿主 docker socket 挂 ro（CI / 镜像构建仍经 docker daemon）；
+# ci-cache 卷与 ci-runner 共享（JUnit XML / 审核报告）。
+services:
+  evolve-driver:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.evolve
+    image: computeflux/evolve-driver:latest
+    container_name: evolve-driver
+    restart: always
+    # 1001 = 宿主仓库属主（wetee；镜像默认 nonroot=1000 无法写 /repo/.git）；
+    # 137 = 宿主 docker 组（docker exec 经 socket 需组写权限）
+    user: "1001:137"
+    env_file: ../../../.env
+    # pi-web 跑在宿主（systemd 用户单元），容器经 host.docker.internal 访问
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # /repo 为宿主挂载 → git 防误用检查（dubious ownership）
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: "safe.directory"
+      GIT_CONFIG_VALUE_0: "/repo"
+      # pi-web 在宿主 :30141（非容器），经 host.docker.internal 访问
+      CODER_WEB_URL: "http://host.docker.internal:30141"
+    networks: [workflow-net]
+    volumes:
+      - ../../../.env:/app/.env:ro
+      - ../../../:/repo
+      # 宿主 home（agent CLI 工具链：pi/ocr 在 ~/.npm-global/bin，Go 在 ~/Soft/go/bin）
+      - /home/wetee:/host
+      - workflow_ci-cache:/cache/ci
+      # 宿主 docker socket（rootful，root:docker 组；容器 user 1001:137 经 docker 组访问）
+      - /run/docker.sock:/run/docker.sock:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sandbox-runner:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8121"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

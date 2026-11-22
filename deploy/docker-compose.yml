@@ -1,0 +1,83 @@
+# ComputeFlux workflow — 统一 docker-compose 入口（S0：docs/plan/S0-部署统一.md）
+#
+# 一服务一文件：全部服务定义在 compose/ 下（infra / core / skills / evolve / marketing / tools），
+# 本文件只做聚合 + 声明单一网络 workflow-net。
+#
+# 用法（本目录下）：
+#   docker compose up -d --build     # 全量启动/重建
+#   docker compose ps                # 状态
+#   docker compose --profile tools run skillctl list   # 一次性工具
+#
+# k8s 映射：docs/plan/evolve-plan.md §3.5（一文件一个 Deployment，逐文件平移）
+
+name: compute-flux-workflow
+
+include:
+  # 基础设施
+  - compose/infra/temporal-pg.yml
+  - compose/infra/temporal.yml
+  - compose/infra/temporal-ui.yml
+  - compose/infra/mysql.yml
+  - compose/infra/qdrant.yml
+  - compose/infra/postiz.yml
+  - compose/infra/otel-collector.yml
+  - compose/infra/jaeger.yml
+  - compose/infra/synapse.yml
+  # 核心服务
+  - compose/core/auth.yml
+  - compose/core/workflow-api.yml
+  - compose/core/workflow-go-worker.yml
+  # board 前端（2026-10-10 重组：board-ops/board-product/board-kit 合并为 apps/core-ui，
+  # 单容器单端口 :5181，路径入口 /ops/ + /product/；board-content/board-email 独立；
+  # 共享代码 core-ui/src/kit，nginx 配置 core-ui.conf / board.conf）
+  - compose/core/core-ui.yml
+  - compose/core/mailer.yml
+  - compose/core/pycraper.yml
+  - compose/core/pyreplay.yml
+  # 小红书 MCP server（apps/social 源码构建；:18060 仅内部网络，登录态 ./data 持久卷）
+  - compose/core/social.yml
+  # 淘宝/闲鱼 MCP server（apps/social/ali-mcp 源码构建；:18070 仅内部网络，登录态 ./ali-mcp-data 持久卷）
+  - compose/core/ali-mcp.yml
+  # B站 MCP server（apps/social 源码 bilibili/ 构建；:18666 仅内部网络，登录态 ./data/bilibili 持久卷）
+  - compose/core/social-bilibili.yml
+  - compose/core/nginx-pi.yml
+  # ai-flow（PicoClaw fork AI 助手网关，:8134 仅内部网络，P1-5）
+  - compose/core/ai-flow.yml
+  # 技能
+  - compose/skills/generate-skill.yml
+  - compose/skills/evaluate-skill.yml
+  - compose/skills/search-skill.yml
+  # 进化闭环（S1，docs/plan/S1-进化闭环.md）
+  - compose/evolve/audit.yml
+  - compose/evolve/sandbox-runner.yml
+  - compose/evolve/sandbox-dind.yml
+  - compose/evolve/evolve-driver.yml
+  - compose/evolve/ci-runner.yml
+  # S2 柔性分支（Go 自研图引擎，替代 LangGraph 选型）
+  - compose/evolve/flex-server.yml
+  # S3 干预舱（死循环检测 watchdog，docs/plan/S3-干预舱.md）
+  - compose/evolve/watchdog.yml
+  # S4 协作底座（Matrix 审批 Bot，docs/plan/S4-协作底座.md）
+  - compose/evolve/matrix-bot.yml
+  # S5 健康巡检与故障自愈（10 分钟 ticker，docs/plan/S5-软件接管与部署编排.md §3.3）
+  - compose/evolve/health-patrol.yml
+  # S6 运维情报（daily/weekly ticker，docs/plan/S6-运维情报.md）
+  - compose/evolve/ops-report.yml
+  # S7 产品情报汇聚（daily 02:00 ticker，docs/plan/S7-产品情报.md §3.1）
+  - compose/evolve/knowledge-sync.yml
+  # S9 统一工作项流水线（分诊/调度/回流三循环，docs/plan/S9-统一工作项流水线.md）
+  - compose/evolve/work-dispatch.yml
+  # 营销（docs/marketing/plan/P2-判断服务地基.md）
+  # 营销判断服务 HTTP 入口（:8131 仅内部网络，MK-16/MK-17）
+  - compose/marketing/mk-judge.yml
+  # 工具（profiles: [tools]，默认不启动）
+  - compose/tools/skillctl.yml
+  - compose/tools/agentctl.yml
+  - compose/tools/inventory.yml
+  - compose/tools/deployctl.yml
+
+# 单一网络：容器间用容器名 DNS 互通，不用 127.0.0.1，不用 /etc/hosts hack
+networks:
+  workflow-net:
+    driver: bridge
+    name: workflow-net

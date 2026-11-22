@@ -1,0 +1,52 @@
+# ai-flow（PicoClaw fork，apps/ai-flow）— workflow 编排的 AI 助手网关（P1-5）：
+# 长驻 gateway（channels + agent loop），:8134 仅内部网络（不发布宿主端口）。
+# 配置加载（P1-5，apps/ai-flow/pkg/workflow/config.go）：
+#   - 根 .env 挂载到 /app/.env：WORKFLOW_API_URL（workflow API :8001 地址）+
+#     AIFLOW_*（端口/provider base_url/model/key/轮次上限），godotenv 读取，
+#     compose env_file 同源注入；
+#   - config.json：镜像未内置（仓库只有 config/config.example.json），文件缺失时
+#     LoadConfig 返回 DefaultConfig 且跳过 env.Parse，因此 gateway host/port 由
+#     AIFLOW_HOST/PORT 在 LoadWorkflowConfig 中无条件写入（不依赖
+#     env.Parse）；模型可经 AIFLOW_MODEL_NAME/PROVIDER/BASE_URL/API_KEY
+#     注入 model_list（新条目置于首位，主 provider 优先命中）。
+# 上线初期仅内部网络供 workflow-api / board 侧调用；不发布宿主端口。
+services:
+  ai-flow:
+    build:
+      context: ../../../apps/ai-flow
+      dockerfile: ../../deploy/Dockerfile.ai-flow
+    image: computeflux/ai-flow:latest
+    container_name: ai-flow
+    restart: always
+    env_file: ../../../.env
+    networks: [workflow-net]
+    ports:
+      - "127.0.0.1:8134:8134"
+    volumes:
+      # 根 .env：WORKFLOW_API_URL / AIFLOW_*（godotenv 读取）
+      - ../../../.env:/app/.env:ro
+    environment:
+      # gateway 监听 0.0.0.0:8134（容器内），P1-5 默认端口。
+      # config.json 缺失时 LoadConfig 返回 DefaultConfig()（Host=localhost）且
+      # 跳过 env.Parse，故 AIFLOW_HOST/PORT 由 LoadWorkflowConfig
+      # 无条件写入 cfg.Gateway，确保 workflow-net 可访问（不依赖 env.Parse）。
+      PICOCLAW_GATEWAY_HOST: "0.0.0.0"
+      AIFLOW_HOST: "0.0.0.0"
+      AIFLOW_PORT: "8134"
+      # 数据目录（cron.json / workspace / memory）：distroless + USER nonroot，
+      # /app 由 Docker 因挂载 /app/.env 创建为 root:root 不可写 → 用 /tmp
+      # （可写层，world-writable sticky）下的路径，避免 setupCron 写
+      # $PICOCLAW_HOME/cron.json 时 MkdirAll EACCES → crash loop。
+      PICOCLAW_HOME: /tmp/.picoclaw
+    depends_on:
+      workflow-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8134"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 0.5
+    labels: ["part-of=compute-flux-workflow"]

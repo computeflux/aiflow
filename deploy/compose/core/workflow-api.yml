@@ -1,0 +1,72 @@
+# Workflow API（Gin REST；:8001 仅 127.0.0.1 调试，主入口走 board 5173 同源代理）
+services:
+  workflow-api:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: api
+    image: computeflux/workflow-api:latest
+    container_name: workflow-api
+    restart: always
+    env_file:
+      - ../../../.env
+      # analyst（需求分析 Agent，复用宿主 pi-web）：PI_WEB_PASSWORD / PI_PROVIDER / PI_MODEL
+      # 与 pi-web 自身配置同源，避免在版本库里重复保存密钥。
+      - ../../../apps/core/agents/pi/config/env
+    # pi-web 跑在宿主（systemd 用户单元），容器经 host.docker.internal 访问
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 宿主 docker socket 为 root:docker（gid 137）；镜像默认 USER nonroot(65532) 无权访问 socket
+    # → S5 运行服务总览/版本管理在容器内 connect: permission denied（降级 not_created）。
+    # 与 evolve-driver / sandbox-runner 同口径：以宿主用户 1001+ docker 组 137 运行。
+    user: "1001:137"
+    ports:
+      - "127.0.0.1:8001:8001"
+    networks: [workflow-net]
+    # 根 .env 同时挂载给二进制 godotenv 读取（internal/config）
+    # docker socket + 只读仓库：S5 版本容器管理（newVersionManager，cmd/api）——
+    # 灰度恶化自动回滚时 versionMgr 自动 version down（S8 DoD：回滚=流量清零+实例停）；
+    # 不挂载时降级为留痕提示人工停（S5 前行为）。
+    volumes:
+      - ../../../.env:/app/.env:ro
+      - /var/run/docker.sock:/run/docker.sock  # 目标路径对齐 .env 的 DOCKER_HOST=unix:///run/docker.sock
+      - ../../../:/repo:ro
+      # 产品「文档」功能：docs/ 需可写（/repo 是只读，单独挂一份 rw 到 /repo-docs）
+      - ../../../docs:/repo-docs
+      # analyst（pi-web）会话文件只读挂载：轮询完成度 + 读最终 JSON。
+      # 容器以 uid 1001（= 宿主 wetee）运行，与目录属主一致，可读 0700 的 .pi。
+      - /home/wetee/.pi/agent:/host/.pi/agent:ro
+      # S8.1 模型目录同步：reviewer（ocr）无 HTTP 接口，只能直写宿主配置 → 可写挂载
+      # （与 evolve-driver 同源同权限，uid 1001 = 宿主 wetee）。
+      - /home/wetee/.opencodereview:/host/.opencodereview
+    environment:
+      REPO_ROOT: /repo
+      DOCS_DIR: /repo-docs
+      # analyst（需求分析 Agent）经宿主 pi-web：
+      PI_WEB_URL: "http://host.docker.internal:30141"
+      PI_SESSION_DIR: "/host/.pi/agent"
+      # pi-web 跑在宿主，看不到容器内 /repo → cwd 需翻译成宿主仓库路径
+      PI_HOST_REPO: "/home/wetee/work/cathome/workflow"
+      PI_ANALYST_TIMEOUT_SEC: "1800"
+      PI_ANALYST_STALL_SEC: "900"
+      # 工具调用预算：达到就催模型收尾（pi 会反复 verify 不停，实测 113+ 条消息）
+      PI_ANALYST_TOOL_BUDGET: "10"
+    depends_on:
+      temporal:
+        condition: service_healthy
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8001"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

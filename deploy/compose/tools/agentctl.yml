@@ -1,0 +1,20 @@
+# 一次性工具（profiles: [tools]，默认不启动）
+# 用法：docker compose --profile tools run -T agentctl register /repo/apps/core/agents/pi/agent.json
+# （仓库挂 /repo 只读；manifest 路径为容器内绝对路径）
+# 与 skillctl 同风格：经 workflow API 落库（agents_registry / agent_bindings）
+services:
+  agentctl:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: agentctl
+    image: computeflux/agentctl:latest
+    container_name: agentctl
+    profiles: ["tools"]
+    environment:
+      WORKFLOW_API_URL: http://workflow-api:8001
+    volumes:
+      - ../../../:/repo:ro
+    networks: [workflow-net]
+    labels: ["part-of=compute-flux-workflow"]

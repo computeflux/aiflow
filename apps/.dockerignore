@@ -1,0 +1,20 @@
+# context = apps/ 的排除项（app SSR 只需 minishop + web3auth）
+**/node_modules
+**/dist
+**/dist-ssr
+**/ossutil_output
+**/*.log
+.git
+**/.gitignore
+**/.env
+!.env.example
+# 其他子项目（app SSR 不需要）
+/postiz
+/pycraper
+/pyreplay
+/contract-deploy
+/tee-node-monitor
+/mailer
+/metrics
+# minishop 独立子服务 share-server（独立部署，不纳入 app SSR）
+/minishop/services

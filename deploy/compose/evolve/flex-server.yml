@@ -1,0 +1,32 @@
+# S2 柔性分支（docs/plan/S2-混合编排.md §3.3）：flex 图引擎服务（Go 自研，替代 LangGraph 选型）。
+# 仅内部网络，不发布端口；FlexActivity（workflow-go-worker）经容器 DNS 调 /runs，
+# 结果写 skill_runs（skill_name=flex:<graph>）。
+# 硬约束（节点 ≤ 20 / token ≤ 50k / 超时 10min）写死在 cmd/flex-server；
+# 故障时停本容器即下线，主干降级为"跳过脑暴节点"（§7 回滚）。
+services:
+  flex-server:
+    build:
+      context: ../../../apps/core
+      dockerfile: ../../deploy/Dockerfile.go
+      args:
+        target: flex-server
+    image: computeflux/flex-server:latest
+    container_name: flex-server
+    restart: always
+    env_file: ../../../.env
+    environment:
+      FLEX_SERVER_PORT: "8124"
+    networks: [workflow-net]
+    depends_on:
+      temporal:
+        condition: service_healthy
+    # 有 HTTP 端口：TCP 拨号探活（distroless 内 /bin/hc port）
+    healthcheck:
+      test: ["CMD", "/bin/hc", "port", "127.0.0.1:8124"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

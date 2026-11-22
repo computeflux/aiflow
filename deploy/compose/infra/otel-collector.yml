@@ -1,0 +1,20 @@
+# OTel Collector（替代 hacks/otel.sh 单容器）
+# 接收 OTLP（grpc :4317 / http :4318）→ 导出 Jaeger；仅内部网络，不发布宿主端口。
+# 镜像无 shell：用 otelcol validate 校验二进制+配置做 liveness
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    restart: always
+    networks: [workflow-net]
+    volumes:
+      - ../../config/otel/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config", "/etc/otelcol-contrib/config.yaml"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+    labels: ["part-of=compute-flux-workflow"]

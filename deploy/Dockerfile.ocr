@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1
+# ocr（reviewer Agent, open-code-review）容器（S1，docs/plan/S1-进化闭环.md §3.7）
+#
+# evolve-driver 经 docker exec 调用 /agents/ocr/adapter.sh（stdin/stdout JSON 协议）。
+# 会话数据 ~/.ocr 挂 named volume（容器重建不丢）；LLM 凭据经 agents/ocr/config/env 注入。
+# 本容器无常驻服务，entrypoint 保持存活供 exec；仓库根挂 /work（只读，review 的 workdir）。
+FROM node:22
+RUN npm install -g @alibaba-group/open-code-review@latest
+COPY apps/core/agents/ocr/adapter.sh /agents/ocr/adapter.sh
+ENV OCR_SESSION_DIR=/root/.ocr
+ENTRYPOINT ["sleep", "infinity"]
