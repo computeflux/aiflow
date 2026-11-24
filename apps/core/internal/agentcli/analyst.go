@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 )
@@ -81,6 +82,8 @@ func RunAnalyze(in io.Reader, stdout, stderr io.Writer) error {
 		return p.fail("missing requirement")
 	}
 
+	// provider 归一见 AnalyzeRequirement（env 装配处）。
+
 	out, err := AnalyzeRequirement(context.Background(), AnalyzeRequest{
 		Requirement:  input.Requirement,
 		History:      input.History,
@@ -110,6 +113,13 @@ func AnalyzeRequirement(ctx context.Context, req AnalyzeRequest, logw io.Writer)
 	if env.Model == "" {
 		return AnalyzeOutput{}, fmt.Errorf("analyst model not configured: set PI_MODEL env")
 	}
+	// provider 归一（与 evolve-driver 同源规则）：PI_MODEL + PI_BASE_URL 命中
+	// model_profiles 的 sync_agents 档案时，provider 归一到 "model-managed"
+	//（S8.1 同步只把档案写进宿主 pi-web models.json 的该 provider）；未命中
+	// 保持 PI_PROVIDER 原值（宿主 models.json 手工维护的 provider，如 local）。
+	normalizePiProvider(logw)
+	env.Provider = os.Getenv("PI_PROVIDER")
+	env.Model = os.Getenv("PI_MODEL")
 	// analyst 只读不写：关掉「只读催促」（那条催促会要求 agent 立刻落代码）。
 	env.ReadOnlyNudgeCalls = 0
 	// 需求分析比实现短：默认 30 分钟硬上限 / 15 分钟停滞（可用专用 env 覆盖）。

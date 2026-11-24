@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/wetee/ai-workflow/internal/config"
+	"github.com/wetee/ai-workflow/internal/db"
 )
 
 // PiEnv pi adapter 运行环境（driver 经 env 注入，与旧 adapter.sh 一致）。
@@ -62,6 +65,57 @@ func (e PiEnv) hostCwd(cwd string) string {
 // var 而非 const：单测需要把它调小，避免每个用例真等 6×pollSec。
 var piStablePolls = 6
 
+// normalizePiProvider provider 归一（S8 模型管理，与 evolve-driver 同源规则）：
+// PI_MODEL + PI_BASE_URL 命中 model_profiles（sync_agents=1，即已同步进宿主
+// pi-web models.json 的 "model-managed" provider）的档案时，把 PI_PROVIDER
+// 改写为 "model-managed"；未命中（档案不存在 / 端点不匹配 / DB 不可达）保持
+// 原值（宿主 models.json 手工维护的 provider，如 local）。
+//
+// 背景：provider/modelId 必须命中 pi-web 的模型目录，否则建会话被拒
+// （"Model is not available in the enabled scope"）。模型同步只写受管
+// provider，env 兑底的 provider 名与档案端点错位就会触发该错误。
+func normalizePiProvider(logw io.Writer) {
+	if strings.TrimSpace(os.Getenv("MYSQL_HOST")) == "" {
+		return // adapter 独立运行且无 DB 配置：无法归一，保持 env
+	}
+	cfg := config.Load()
+	dbHandle, err := db.Open(cfg)
+	if err != nil {
+		fmt.Fprintf(logw, "provider-normalize: mysql 连接失败，保持 PI_PROVIDER=%s: %v\n", os.Getenv("PI_PROVIDER"), err)
+		return
+	}
+	defer func() {
+		if sqlDB, err := dbHandle.DB.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	}()
+	var p db.ModelProfile
+	q := dbHandle.Where("sync_agents = 1 AND model = ?", strings.TrimSpace(os.Getenv("PI_MODEL")))
+	base := strings.TrimSpace(os.Getenv("PI_BASE_URL"))
+	if base == "" {
+		base = strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+	}
+	if base != "" {
+		q = q.Where("base_url = ?", base)
+	}
+	if err := q.Order("active DESC, id").First(&p).Error; err != nil {
+		return // 未命中档案：保持 env
+	}
+	if os.Getenv("PI_PROVIDER") != "model-managed" {
+		fmt.Fprintf(logw, "provider-normalize: PI_PROVIDER %q → %q（档案 %q，model %q）\n",
+			os.Getenv("PI_PROVIDER"), "model-managed", p.Name, p.Model)
+		_ = os.Setenv("PI_PROVIDER", "model-managed")
+	}
+	// 档案名与档案 model 同步（S8 模型管理）：model_profiles.model 是 pi-web 目录里的
+	// 真实 modelId，档案展示名（name）可能与 modelId 不同（如 local-qwen3.8 vs
+	// Qwen3.8-27B）；消费面只传档案名时会报 "Model is not available in the enabled scope"。
+	if os.Getenv("PI_MODEL") != p.Model {
+		fmt.Fprintf(logw, "provider-normalize: PI_MODEL %q → %q（档案 %q）\n",
+			os.Getenv("PI_MODEL"), p.Model, p.Name)
+		_ = os.Setenv("PI_MODEL", p.Model)
+	}
+}
+
 // piFollowUpRetries "already processing" 时的重试次数（每 15s 一次，共 ~5 分钟）。
 var piFollowUpRetries = 20
 
@@ -105,6 +159,9 @@ func RunPi(in io.Reader, stdout, stderr io.Writer) error {
 	if env.Model == "" {
 		return p.fail("coder model not configured: set PI_MODEL env")
 	}
+	normalizePiProvider(p.stderr)
+	env.Provider = os.Getenv("PI_PROVIDER")
+	env.Model = os.Getenv("PI_MODEL")
 	EnsureSafeDirectory(input.Workdir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(env.TimeoutSec)*time.Second)

@@ -163,7 +163,6 @@ func profileModel(p db.ModelProfile, apiKey string) map[string]any {
 	}
 }
 
-
 // readJSONFile 读 JSON 对象文件；不存在/损坏返回空 map（损坏时保留原字节备份）。
 func readJSONFile(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
@@ -236,9 +235,12 @@ func syncPiWebModels(ps []db.ModelProfile, hostHome, activeName, fallbackKey str
 		return "", fmt.Errorf("写 %s: %w", modelsPath, err)
 	}
 
-	// enabledModels：把「model-managed/<model>:*」并入 settings.json（保留既有项，去重）。
+	// enabledModels：把「model-managed/<model>」并入 settings.json（保留既有项，去重）。
 	// 若既有 scope 未包含全量通配（"*"），补入 "*"：新档案进 scope 的同时不把
 	// 既有全量目录缩掉（pi 的 enabledModels 是白名单 scope，未列入 = 会话内不可选）。
+	// ⚠️ 不带 ":*" 后缀：pi 的 scope 解析器把 ":" 后缀当 thinking level（off/low/high…），
+	// "*" 不是合法 level → glob 退化成精确匹配 "model-managed/<model>:*" → 永不命中，
+	// 新档案进不了 scope（报 "Model is not available in the enabled scope"）。
 	settingsPath := filepath.Join(hostHome, ".pi", "agent", "settings.json")
 	settings, err := readJSONFile(settingsPath)
 	if err != nil {
@@ -273,7 +275,7 @@ func syncPiWebModels(ps []db.ModelProfile, hostHome, activeName, fallbackKey str
 			continue
 		}
 		seen[key] = true
-		merged = append(merged, key+":*")
+		merged = append(merged, key)
 		added++
 	}
 	if added > 0 || activeName != "" {

@@ -159,8 +159,9 @@ func NewInbound(boardID int, session, userID, content string) bus.InboundMessage
 // wake the pump; the pump then emits the result frame (with captured
 // mutation calls) and closes the stream.
 type Turn struct {
-	ChatID string
-	JWT    string
+	ChatID     string
+	JWT        string
+	sessionKey string // board session key ("board:<boardID>#<session>") for session-scoped lookups
 
 	mu       sync.Mutex
 	queue    []Frame
@@ -170,6 +171,7 @@ type Turn struct {
 	calls    []ToolCall
 	callSeq  int
 	streamer *streamer // set by BeginStream (configured-streaming path)
+	termSrc  string    // terminal-signal source: "relay" (final outbound) or "streamer"
 
 	notify chan struct{}
 }
@@ -177,6 +179,21 @@ type Turn struct {
 // NewTurn creates a turn for a chat id with the caller's JWT.
 func NewTurn(chatID, jwt string) *Turn {
 	return &Turn{ChatID: chatID, JWT: jwt, notify: make(chan struct{}, 1)}
+}
+
+// SetSessionKey records the board session key for session-scoped turn
+// lookups (BeginStream / BoardTurnForSession).
+func (t *Turn) SetSessionKey(key string) {
+	t.mu.Lock()
+	t.sessionKey = key
+	t.mu.Unlock()
+}
+
+// SessionKey returns the board session key (empty before SetSessionKey).
+func (t *Turn) SessionKey() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.sessionKey
 }
 
 type turnCtxKeyStruct struct{}
@@ -197,14 +214,14 @@ func TurnFromContext(ctx context.Context) *Turn {
 	return t
 }
 
-// enqueueFrame buffers a frame for the pump and wakes it. Frames arriving
-// after the turn is done are dropped (late tool feedback, etc.).
+// enqueueFrame buffers a frame for the pump and wakes it. Frames that arrive
+// after the turn is done are appended to the queue and re-signal the pump
+// (the pump's terminal drain pass drains them before emitting the result
+// frame; a keep-alive wake-up races with frames enqueued by the relay in the
+// same window, so the pump must never emit the terminal frame while queued
+// frames remain).
 func (t *Turn) enqueueFrame(f Frame) {
 	t.mu.Lock()
-	if t.done {
-		t.mu.Unlock()
-		return
-	}
 	t.queue = append(t.queue, f)
 	t.mu.Unlock()
 	select {
@@ -222,20 +239,73 @@ func (t *Turn) SendKeepAlive() {
 // any captured mutation calls, using finalContent as the result content
 // when the model produced no streamed prose; a non-empty errMsg (streamer
 // cancel / watchdog / relay failure) emits an error frame instead).
+//
+// First-write-wins for the terminal signal, with two exceptions for a turn
+// already marked done with an *empty* final and no error:
+//
+//   - any later Finish may fill the final content (a streamer finalize can
+//     land with empty content — the pipeline's summary-finalize — before the
+//     agent loop publishes the real final outbound);
+//   - a relay final (FinishFromRelay) may fully replace a streamer-origin
+//     terminal signal: a mid-turn streamer finalize (prose + tool calls in
+//     one iteration) must not steal the turn's real final answer from the
+//     authoritative relay final outbound.
 func (t *Turn) Finish(finalContent, errMsg string) {
+	t.finish(finalContent, errMsg, "streamer")
+}
+
+// FinishFromRelay marks the turn done from the relay's final-outbound path
+// (the authoritative turn-completion signal; see Finish's rules).
+func (t *Turn) FinishFromRelay(finalContent, errMsg string) {
+	t.finish(finalContent, errMsg, "relay")
+}
+
+func (t *Turn) finish(finalContent, errMsg string, src string) {
 	t.mu.Lock()
 	if t.done {
+		emptyFinal := t.errMsg == "" && strings.TrimSpace(t.final) == ""
+		fillable := errMsg == "" && strings.TrimSpace(finalContent) != "" && emptyFinal
+		replaceable := src == "relay" && errMsg == "" && t.errMsg == "" && t.termSrc != "relay"
+		if fillable || replaceable {
+			t.final = finalContent
+			t.errMsg = errMsg
+			t.termSrc = src
+			t.mu.Unlock()
+			select {
+			case t.notify <- struct{}{}:
+			default:
+			}
+			return
+		}
 		t.mu.Unlock()
 		return
 	}
 	t.done = true
 	t.final = finalContent
 	t.errMsg = errMsg
+	t.termSrc = src
+	t.streamer = nil
 	t.mu.Unlock()
 	select {
 	case t.notify <- struct{}{}:
 	default:
 	}
+}
+
+// CancelStream detaches the iteration streamer without finishing the turn
+// (the pipeline's tool-call path cancels the LLM stream before executing
+// tools; the next iteration attaches a fresh streamer via BeginStream). If
+// the turn is already done, it terminates with an error frame (legacy
+// Cancel semantics).
+func (t *Turn) CancelStream() {
+	t.mu.Lock()
+	if t.done {
+		t.mu.Unlock()
+		t.Finish("", "assistant turn cancelled")
+		return
+	}
+	t.streamer = nil
+	t.mu.Unlock()
 }
 
 // AddCall records a mutation tool call for the final result frame. Safe for
@@ -274,6 +344,15 @@ func (t *Turn) setStreamer(s *streamer) {
 	t.streamer = s
 }
 
+// detachStreamer pops the active iteration streamer (nil when none).
+func (t *Turn) detachStreamer() *streamer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	s := t.streamer
+	t.streamer = nil
+	return s
+}
+
 // drainFrames pops all buffered frames. The bools report the terminal state
 // (set once the streamer finalized / the turn was finished), with the final
 // content and error text for the result frame.
@@ -293,11 +372,11 @@ func (t *Turn) drainFrames() ([]Frame, bool, string, string) {
 type Channel struct {
 	bus *bus.MessageBus
 
-	mu      sync.Mutex
-	turns   map[string]*Turn // chatID → active turn (one turn per chat)
-	running bool
-	cancel  context.CancelFunc
-	sub     *bus.OutboundSubscription
+	mu          sync.Mutex
+	turns       map[string]*Turn // chatID → most-recently-attached turn (identity fallbacks)
+	sessionTurn map[string]*Turn // board session key → active turn (concurrent turns share a chat)
+	running     bool
+	cancel      context.CancelFunc
 }
 
 var _ channels.Channel = (*Channel)(nil)
@@ -337,7 +416,7 @@ func DefaultChannel() *Channel {
 // Name implements channels.Channel.
 func (c *Channel) Name() string { return ChannelName }
 
-// Start launches the outbound relay. Safe to call once per Start/Stop cycle.
+// Start marks the channel running. Safe to call once per Start/Stop cycle.
 func (c *Channel) Start(ctx context.Context) error {
 	c.mu.Lock()
 	if c.running {
@@ -345,34 +424,31 @@ func (c *Channel) Start(ctx context.Context) error {
 		return nil
 	}
 	c.running = true
-	cctx, cancel := context.WithCancel(ctx)
+	_, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
-	// Fan-out subscription: the relay observes every outbound published on
-	// the bus without consuming the dispatcher queues (a consume-based
-	// relay races the manager dispatcher for the same messages, which
-	// makes final delivery nondeterministic).
-	sub := c.bus.SubscribeOutbound(bus.DefaultBufferSize())
-	c.sub = sub
+	// [workflow-fork] P3-1: no channel-level fan-out subscription. The relay
+	// is purely reactive: every /chat request attaches its turn to the
+	// session registry and runs a dedicated per-request relay (see
+	// Handler.RelayTurn), which is the sole delivery path for turn-scoped
+	// outbounds. A channel-wide relay here would double-deliver every message
+	// (the shared channel subscription + the per-request subscription both
+	// resolve the same turn from ValueCtx → duplicate tool/token frames).
 	c.mu.Unlock()
 
-	go c.relay(cctx, sub)
 	logger.InfoCF("board", "board chat channel started", nil)
 	return nil
 }
 
-// Stop stops the relay and detaches any active turns.
+// Stop stops the channel and detaches any active turns.
 func (c *Channel) Stop(ctx context.Context) error {
 	c.mu.Lock()
 	if c.cancel != nil {
 		c.cancel()
 		c.cancel = nil
 	}
-	if c.sub != nil {
-		c.sub.Close()
-		c.sub = nil
-	}
 	c.running = false
 	c.turns = make(map[string]*Turn)
+	c.sessionTurn = make(map[string]*Turn)
 	c.mu.Unlock()
 	logger.InfoCF("board", "board chat channel stopped", nil)
 	return nil
@@ -402,6 +478,13 @@ func (c *Channel) ReasoningChannelID() string { return "" }
 // mis-delivered. Messages with no turn attached (no active /chat request)
 // are acknowledged and dropped.
 func (c *Channel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
+	// The relay (fan-out subscription) is the primary delivery path and
+	// resolves turns strictly from each message's ValueCtx. The synchronous
+	// Send path (Manager.SendMessage / SendToChannel) is used by message-like
+	// tools; deliver only when the caller's context explicitly carries a
+	// board turn. It must never resolve a turn by chat id — the dispatcher's
+	// Send ctx carries no turn, and resolving by chat id would re-deliver
+	// (or wrongly finish) messages the relay already consumed.
 	if t := TurnFromContext(ctx); t != nil {
 		c.deliver(ctx, t, msg)
 	}
@@ -411,51 +494,39 @@ func (c *Channel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, 
 // SendMedia implements channels.MediaSender: synchronous media delivery to
 // the active turn's sink (manager sendMediaWithRetry path).
 func (c *Channel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) ([]string, error) {
-	t := TurnFromContext(ctx)
-	if t == nil {
-		return nil, fmt.Errorf("board: no active turn for chat %s", msg.ChatID)
+	// Same contract as Send: deliver only when the caller's context carries
+	// a board turn; the relay handles fan-out delivery via ValueCtx.
+	if t := TurnFromContext(ctx); t != nil {
+		refs := make([]string, 0, len(msg.Parts))
+		for _, part := range msg.Parts {
+			refs = append(refs, part.Ref)
+		}
+		t.enqueueFrame(mediaFrame(refs))
+		return []string{"board"}, nil
 	}
-	refs := make([]string, 0, len(msg.Parts))
-	for _, part := range msg.Parts {
-		refs = append(refs, part.Ref)
-	}
-	t.enqueueFrame(mediaFrame(refs))
 	return []string{"board"}, nil
 }
 
 // ---------------------------------------------------------------------------
-// Outbound relay: observe bus messages addressed to this channel (fan-out)
+// Outbound relay: per-request relay loops (see RelayTurn)
 // ---------------------------------------------------------------------------
 
-func (c *Channel) relay(ctx context.Context, sub *bus.OutboundSubscription) {
+// RelayTurn [workflow-fork] P3-1: per-request relay loop. Consumes a
+// dedicated bus outbound subscription and delivers ONLY the messages whose
+// context carries the given turn (ValueCtx). Used by the /chat handler so
+// each stream receives exactly its own turn's outbounds; media frames get
+// the same treatment. Returns when the subscription closes.
+func (c *Channel) RelayTurn(t *Turn, sub *bus.OutboundSubscription) {
 	for {
-		select {
-		case <-ctx.Done():
+		msg, ok := <-sub.Outbound
+		if !ok {
 			return
-		case msg, ok := <-sub.Outbound:
-			if !ok {
-				return
-			}
-			if msg.Context.Channel != ChannelName && msg.Channel != ChannelName {
-				continue // not ours; the manager dispatcher delivers it
-			}
-			if t := TurnFromContext(msg.Context.ValueCtx); t != nil {
-				c.deliver(msg.Context.ValueCtx, t, msg)
-			}
-		case media, ok := <-sub.OutboundMedia:
-			if !ok {
-				return
-			}
-			if media.Context.Channel != ChannelName && media.Channel != ChannelName {
-				continue
-			}
-			if t := TurnFromContext(media.Context.ValueCtx); t != nil {
-				refs := make([]string, 0, len(media.Parts))
-				for _, part := range media.Parts {
-					refs = append(refs, part.Ref)
-				}
-				t.enqueueFrame(mediaFrame(refs))
-			}
+		}
+		if msg.Context.Channel != ChannelName && msg.Channel != ChannelName {
+			continue
+		}
+		if TurnFromContext(msg.Context.ValueCtx) == t {
+			c.deliver(msg.Context.ValueCtx, t, msg)
 		}
 	}
 }
@@ -483,15 +554,35 @@ func (c *Channel) deliver(ctx context.Context, t *Turn, msg bus.OutboundMessage)
 
 	t.mu.Lock()
 	hasStreamer := t.streamer != nil
+	streamerDone := t.done
 	t.mu.Unlock()
 
 	switch {
 	case outKind == "final":
 		content := msg.Content
-		if rawKind == "tool_feedback" || rawKind == "tool_calls" {
+		auxiliary := rawKind == "tool_feedback" || rawKind == "tool_calls"
+		if auxiliary {
 			content = ""
 		}
-		t.Finish(content, "")
+		// The configured-streaming path delivers the final text through the
+		// streamer. A finalized streamer already finished the turn itself, so
+		// the final outbound is a pure completion signal. A *cancelled*
+		// streamer (the pipeline cancels the LLM stream on every tool-call
+		// iteration) never finalized, so the final outbound is the only
+		// remaining carrier of the turn's answer: keep its content and finish
+		// the turn from it (the relay bypasses the manager's suppression for
+		// internal channels, so this delivery is guaranteed to arrive).
+		//
+		// Auxiliary (tool-kind) finals never complete the turn: they must not
+		// mark it done (that would terminate the SSE stream mid-turn, before
+		// the real answer), and they never carry final content.
+		if auxiliary {
+			return
+		}
+		if hasStreamer && streamerDone && content != "" {
+			content = ""
+		}
+		t.FinishFromRelay(content, "")
 	case rawKind == "tool_feedback":
 		t.enqueueFrame(Frame{Type: "tool", Text: msg.Content})
 	case rawKind == "tool_calls":
@@ -518,28 +609,57 @@ func (c *Channel) turnFor(chatID string) *Turn {
 
 // BeginStream implements channels.StreamingCapable: the agent loop's
 // configured-streaming path attaches a per-turn SSE streamer to the chat.
-func (c *Channel) BeginStream(ctx context.Context, chatID string) (channels.Streamer, error) {
-	c.mu.Lock()
-	t := c.turns[chatID]
-	c.mu.Unlock()
+// The turn is resolved from the session key ("board:<boardID>#<session>")
+// first — concurrent turns on the same chat each own their session, so a
+// steering-continuation turn attaches to ITS OWN stream (the previous chatID
+// lookup attached the continuation's tokens to whichever request last
+// attached, misrouting the answer). Falls back to the chat slot when the
+// session key is not a board session key.
+func (c *Channel) BeginStream(ctx context.Context, chatID, sessionKey string) (channels.Streamer, error) {
+	var t *Turn
+	if _, ok := ParseSessionKey(sessionKey); ok {
+		t = c.BoardTurnForSession(sessionKey)
+	}
+	if t == nil {
+		c.mu.Lock()
+		t = c.turns[chatID]
+		c.mu.Unlock()
+	}
 	if t == nil {
 		return nil, fmt.Errorf("board: no active turn for chat %s", chatID)
 	}
 	st := newStreamer(ctx, t)
 	t.setStreamer(st)
+	// Re-arm the previous iteration's streamer (the pipeline cancels the
+	// configured stream on every tool-call iteration). A cancelled streamer
+	// ignores late updates and its manager hooks no longer fire Finalize, so
+	// without this re-arm the streamActive suppression marker set by an
+	// earlier iteration's finalize is never cleared and the final outbound of
+	// the turn is suppressed → the SSE stream never terminates.
+	if prev := t.detachStreamer(); prev != nil && prev != st {
+		prev.Cancel(ctx)
+	}
 	return st, nil
 }
 
-// AttachTurn registers the active turn for one chat (replaces any stale
-// turn on the same chat, finishing it with an error frame). The returned
-// release func detaches it (only if it is still the attached turn).
+// AttachTurn registers the active turn for one chat. Concurrent turns on the
+// same chat are allowed: each POST /chat request owns its own turn and
+// subscribes to the bus relay for its own session key, so a second request
+// must NEVER finish the first turn's stream (the previous single-slot design
+// killed in-flight turns with "replaced by a newer request" whenever the
+// agent loop ran a queued turn for the same session concurrently — e.g. a
+// steering continuation — and the killed stream never delivered its answer).
+// The returned release func detaches this turn from the chat slot (only if
+// it is still the attached turn; the slot is best-effort and used by the
+// tool-side identity fallbacks).
 func (c *Channel) AttachTurn(chatID string, t *Turn) (release func()) {
+	sessionKey := t.SessionKey()
 	c.mu.Lock()
-	if prev, ok := c.turns[chatID]; ok && prev != t {
-		logger.WarnCF("board", "replacing stale board turn", map[string]any{"chat_id": chatID})
-		prev.Finish("", "replaced by a newer request")
-	}
 	c.turns[chatID] = t
+	if c.sessionTurn == nil {
+		c.sessionTurn = make(map[string]*Turn)
+	}
+	c.sessionTurn[sessionKey] = t
 	c.mu.Unlock()
 	// Wake the pump so it observes the freshly attached turn (frames
 	// enqueued before this point — e.g. tool feedback arriving between
@@ -551,6 +671,9 @@ func (c *Channel) AttachTurn(chatID string, t *Turn) (release func()) {
 		if cur, ok := c.turns[chatID]; ok && cur == t {
 			delete(c.turns, chatID)
 		}
+		if cur, ok := c.sessionTurn[sessionKey]; ok && cur == t {
+			delete(c.sessionTurn, sessionKey)
+		}
 		c.mu.Unlock()
 	}
 	return release
@@ -560,17 +683,15 @@ func (c *Channel) AttachTurn(chatID string, t *Turn) (release func()) {
 // session key ([workflow-fork] P3-1). The session key for board chats is
 // "board:<boardID>#<session>". Used by tools (e.g. the workflow write
 // tools) to resolve the request-scoped identity of a board turn from the
-// tool execution context.
+// tool execution context, and by BeginStream to attach a streamer to the
+// correct turn when concurrent turns share a chat.
 func (c *Channel) BoardTurnForSession(sessionKey string) *Turn {
 	if _, ok := ParseSessionKey(sessionKey); !ok {
 		return nil
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, t := range c.turns {
-		return t // board sessions are 1:1 with chats; single active turn
-	}
-	return nil
+	return c.sessionTurn[sessionKey]
 }
 
 // JWTFor returns the JWT attached to the active turn for a chat (empty when

@@ -305,12 +305,13 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 						return
 					}
 					if continued != "" {
-						al.PublishResponseIfNeeded(ctx, target.Channel, target.ChatID, target.SessionKey, continued)
+						pubCtx := mergeContextValues(ctx, m.ValueCtx)
+						al.PublishResponseIfNeeded(pubCtx, target.Channel, target.ChatID, target.SessionKey, continued)
 					}
 					return
 				}
 
-				al.runTurnWithSteering(ctx, m)
+				al.runTurnWithSteering(mergeContextValues(ctx, msg.ValueCtx), msg)
 			}(msg, placeholder)
 
 			// TODO: Re-enable media cleanup after inbound media is properly consumed by the agent.

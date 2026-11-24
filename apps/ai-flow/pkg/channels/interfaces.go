@@ -56,8 +56,12 @@ type PlaceholderCapable interface {
 // The channel SHOULD gracefully degrade if the platform rejects streaming
 // (e.g. Telegram bot without forum mode). In that case, Update becomes a no-op
 // and Finalize still delivers the final message.
+//
+// sessionKey is the agent-loop session key for the current turn; channels
+// that serialize sessions (e.g. the board SSE channel) use it to attach the
+// streamer to the correct active turn when concurrent turns share a chat.
 type StreamingCapable interface {
-	BeginStream(ctx context.Context, chatID string) (Streamer, error)
+	BeginStream(ctx context.Context, chatID, sessionKey string) (Streamer, error)
 }
 
 // Streamer is defined in pkg/bus to avoid circular imports.

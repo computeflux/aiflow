@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/computeflux/ai-flow/pkg/bus"
+	"github.com/computeflux/ai-flow/pkg/constants"
 	"github.com/computeflux/ai-flow/pkg/logger"
 )
 
@@ -34,6 +35,13 @@ func (al *AgentLoop) runTurnWithSteering(ctx context.Context, initialMsg bus.Inb
 		response = ""
 	}
 	finalResponse := response
+	// [workflow-fork] P3-1: internal channels (board SSE) already publish the
+	// turn's final content from runAgentLoop (the SendResponse/internal-channel
+	// publish). Publishing it again here delivers the final outbound twice; the
+	// second delivery arrives after the first finished the turn and detached
+	// its streamer, which blanks its content → the SSE result frame ends up
+	// empty. Skip the duplicate publish for internal channels.
+	publishedInTurn := constants.IsInternalChannel(initialMsg.Channel)
 
 	// Build continuation target
 	target, targetErr := al.buildContinuationTarget(initialMsg)
@@ -60,10 +68,11 @@ func (al *AgentLoop) runTurnWithSteering(ctx context.Context, initialMsg bus.Inb
 			})
 	} else if continued != "" {
 		finalResponse = continued
+		publishedInTurn = false
 	}
 
 	// Publish final response
-	if finalResponse != "" {
+	if finalResponse != "" && !publishedInTurn {
 		al.PublishResponseIfNeeded(ctx, target.Channel, target.ChatID, target.SessionKey, finalResponse)
 	}
 }

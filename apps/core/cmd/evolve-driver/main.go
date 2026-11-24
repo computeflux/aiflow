@@ -91,6 +91,13 @@ type Config struct {
 	CoderWebPassword string `env:"CODER_WEB_PASSWORD" envDefault:""`
 	CoderProvider    string `env:"CODER_PROVIDER" envDefault:"local"`
 	CoderModel       string `env:"CODER_MODEL" envDefault:"Qwen3.8-27B"`
+	// CoderBaseURL：env 兜底 coder 模型（CODER_MODEL）所在的 OpenAI 兼容端点。
+	// refreshModelsFromProfile 用它判定兜底 provider：端点与档案 baseUrl 一致
+	// → provider 归一到 "model-managed"（pi-web models.json 的受管 provider，
+	// 新档案同步只写这个 provider）；不一致 → 保持 CODER_PROVIDER（宿主
+	// models.json 里手工维护的 provider，如 "local"）。否则会出现
+	// "Model is not available in the enabled scope"（provider 与档案目录错位）。
+	CoderBaseURL string `env:"CODER_BASE_URL" envDefault:""`
 	// CoderAPIKey：模型管理（S8.1）同步进 pi-web models.json 时的兜底 key
 	//（档案未填 api_key 时用它；与 CODER_PROVIDER/CODER_MODEL 同源 .env）。
 	CoderAPIKey string `env:"CODER_API_KEY" envDefault:""`

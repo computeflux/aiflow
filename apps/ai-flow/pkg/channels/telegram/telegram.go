@@ -1647,7 +1647,7 @@ func (c *TelegramChannel) stripBotMention(content string) string {
 }
 
 // BeginStream implements channels.StreamingCapable.
-func (c *TelegramChannel) BeginStream(ctx context.Context, chatID string) (channels.Streamer, error) {
+func (c *TelegramChannel) BeginStream(ctx context.Context, chatID, _ string) (channels.Streamer, error) {
 	if !c.tgCfg.Streaming.Enabled {
 		return nil, fmt.Errorf("streaming disabled in config")
 	}

@@ -41,6 +41,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/computeflux/ai-flow/pkg/config"
+	"github.com/computeflux/ai-flow/pkg/logger"
 )
 
 // DefaultWorkflowAPIURLEnv is the env key carrying the workflow API base URL.
@@ -168,6 +169,14 @@ func LoadWorkflowConfig(cfg *config.Config, configPath string) (*WorkflowConfig,
 		cfg.Agents.Defaults.MaxToolIterations = wf.MaxToolIterations
 	}
 
+	// [workflow-fork] board AI 侧栏原生逐 token 流式：渠道级开关（与
+	// mergeModelList 的模型级开关配套，缺一不可）。board 是内部虚拟渠道，
+	// 不走 factory 初始化（由 cmd/ai-flow 直接 RegisterChannel），这里只需
+	// 把 settings.streaming.enabled 写进渠道配置供 pipeline 的
+	// channelStreamingConfig 读取；预先用原型 Decode 一次，避免
+	// InitChannelList 对未注册类型报 unknown type。
+	wf.mergeBoardChannel(cfg)
+
 	// [workflow-fork] Telegram channel: inject/enable from workflow env so a
 	// deployment needs no config.json (channel enabled is not env-bindable).
 	if err := wf.applyTelegramChannel(cfg); err != nil {
@@ -205,6 +214,10 @@ func (w *WorkflowConfig) mergeModelList(cfg *config.Config) {
 			m.APIKeys = config.SecureStrings{config.NewSecureString(w.APIKey)}
 		}
 		m.Enabled = true
+		// [workflow-fork] board AI 侧栏原生逐 token 流式：agent pipeline 的
+		// configured-streaming 要求 model_list 条目显式开启 streaming.enabled，
+		// 这里随 AIFLOW_* 注入一并打开（配合 mergeBoardChannel 的渠道级开关）。
+		m.Streaming = config.ModelStreamingConfig{Enabled: true}
 		return
 	}
 
@@ -214,11 +227,38 @@ func (w *WorkflowConfig) mergeModelList(cfg *config.Config) {
 		Model:     w.ModelName,
 		APIBase:   w.BaseURL,
 		Enabled:   true,
+		Streaming: config.ModelStreamingConfig{Enabled: true},
 	}
 	if w.APIKey != "" {
 		entry.APIKeys = config.SecureStrings{config.NewSecureString(w.APIKey)}
 	}
 	cfg.ModelList = append(config.SecureModelList{entry}, cfg.ModelList...)
+}
+
+// mergeBoardChannel ensures cfg.Channels has a "board" entry with
+// settings.streaming.enabled = true so the agent pipeline's configured
+// streaming path is eligible for the board AI sidebar (see
+// pkg/agent/pipeline_streaming.go configuredStreamingEligible). Settings use
+// the registered BoardSettings prototype (pkg/config), matching how the
+// built-in channels decode their settings blocks.
+func (w *WorkflowConfig) mergeBoardChannel(cfg *config.Config) {
+	if cfg.Channels == nil {
+		cfg.Channels = config.ChannelsConfig{}
+	}
+	bc := cfg.Channels["board"]
+	if bc == nil {
+		bc = &config.Channel{}
+		bc.SetName("board")
+		bc.Type = "board"
+		cfg.Channels["board"] = bc
+	}
+	settings := &config.BoardSettings{Streaming: config.StreamingConfig{Enabled: true}}
+	if err := bc.Decode(settings); err != nil {
+		logger.WarnCF("workflow-config", "board channel streaming inject failed", map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
 }
 
 // applyTelegramChannel merges workflow-side telegram channel env into cfg.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/computeflux/ai-flow/pkg/agent"
 	"github.com/computeflux/ai-flow/pkg/bus"
+	"github.com/computeflux/ai-flow/pkg/logger"
 )
 
 // ChatPath is the gateway route mounted for the board AI sidebar.
@@ -123,17 +124,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// SSE turns run far longer than the gateway server's global WriteTimeout
+	// (30s): clear the per-response write deadline so long generations are
+	// not cancelled mid-stream. The turn's own watchdog bounds the stream.
+	if rc := http.NewResponseController(w); rc != nil {
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			logger.WarnCF("board", "clear SSE write deadline failed", map[string]any{"error": err.Error()})
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
 	chatID := "u" + req.UserID
 	turnCtx := NewTurn(chatID, jwt)
+	turnCtx.SetSessionKey(SessionKey(req.BoardID, req.Session))
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
 	release := h.channel.AttachTurn(chatID, turnCtx)
-	defer release()
+	defer func() {
+		release()
+	}()
 
 	// Publish the inbound message carrying the request-scoped turn context:
 	// the agent loop consumes it from InboundChan with this same ctx and
@@ -153,6 +165,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Per-request relay: this stream only observes outbound messages whose
+	// context carries its own turn (ValueCtx). A single shared relay would
+	// resolve "the active turn for the chat", which is racy when concurrent
+	// turns share a chat (steering continuations, queued follow-ups).
+	relaySub := h.bus.SubscribeOutbound(64)
+	defer relaySub.Close()
+
 	// Pump: single writer for this stream. Drains the turn's frame queue on
 	// notifications and terminates when the turn is done (streamer finalize
 	// / final outbound / watchdog / client disconnect).
@@ -164,6 +183,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cancel() // unblock the SSE loop below when the pump terminates
 	}()
 	defer pumpCancel()
+
+	// Relay goroutine: deliver this request's turn-scoped outbounds.
+	relayDone := make(chan struct{})
+	go func() {
+		defer close(relayDone)
+		h.channel.RelayTurn(turnCtx, relaySub)
+	}()
+	defer func() { relaySub.Close(); <-relayDone }()
 
 	// Watchdog: hard bound on one turn.
 	watchdog := time.NewTimer(TurnTimeout)
@@ -232,6 +259,45 @@ func (h *Handler) pump(
 			}
 
 			frames, done, final, errMsg := turn.drainFrames()
+
+			if done {
+				// Drain any frames the relay/streamer enqueued concurrently with
+				// the terminal signal (tool feedback and late token frames must
+				// not be dropped by the result frame). The relay runs on its own
+				// goroutine, so give in-flight messages a short grace window to
+				// land in the queue before the stream closes.
+				grace := time.After(150 * time.Millisecond)
+			drained:
+				for {
+					for {
+						extra, _, extraFinal, extraErr := turn.drainFrames()
+						if len(extra) > 0 {
+							frames = append(frames, extra...)
+						}
+						// Only a non-empty terminal payload may override the terminal
+						// signal captured with the first drain: late auxiliary frames
+						// (tool feedback) that land in the queue during the grace window
+						// return empty final/errMsg and must not evict the final content.
+						if extraFinal != "" {
+							final = extraFinal
+						}
+						if extraErr != "" {
+							errMsg = extraErr
+						}
+						if len(extra) == 0 {
+							break
+						}
+					}
+					select {
+					case <-turn.notify:
+						continue drained
+					case <-grace:
+						break drained
+					case <-ctx.Done():
+						break drained
+					}
+				}
+			}
 
 			for _, f := range frames {
 				if f.Type == "keepalive" {

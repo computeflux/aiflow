@@ -36,11 +36,25 @@ func (d *driver) refreshModelsFromProfile() {
 	apply := func(consumer, envModel string) string {
 		for _, c := range consumers {
 			if c == consumer && p.Model != "" && p.Model != envModel {
-				log.Printf("model-config: %s model %q → %q（active 档案 %q）", consumer, envModel, p.Model, p.Name)
+				log.Printf("model-config: %s model %q → %q（档案 %q）", consumer, envModel, p.Model, p.Name)
 				return p.Model
 			}
 		}
 		return envModel
+	}
+	// provider 归一（受管目录一致性）：active 档案生效且其端点与 env 兜底
+	// 端点（CODER_BASE_URL，未设时回退 OPENAI_BASE_URL，同一套 OpenAI 兼容
+	// 配置）一致时，把兜底 provider（默认 "local"）归一到 "model-managed"
+	//——S8.1 的模型同步只把档案写进宿主 pi-web 的 models.json
+	// providers["model-managed"]，宿主 models.json 的 "local" provider 并不
+	// 包含新档案，provider/model 错位会被 pi-web 拒绝
+	// （"Model is not available in the enabled scope"）。
+	base := d.cfg.CoderBaseURL
+	if strings.TrimSpace(base) == "" {
+		base = os.Getenv("OPENAI_BASE_URL")
+	}
+	if p.BaseURL != "" && strings.EqualFold(strings.TrimRight(p.BaseURL, "/"), strings.TrimRight(base, "/")) {
+		d.cfg.CoderProvider = "model-managed"
 	}
 	if len(consumers) == 0 { // consumers 空 = 应用到全部消费面
 		if p.Model != "" && p.Model != d.cfg.CoderModel {

@@ -635,7 +635,7 @@ func (m *Manager) GetStreamer(ctx context.Context, channelName, chatID, sessionK
 		return nil, false
 	}
 
-	streamer, err := sc.BeginStream(ctx, chatID)
+	streamer, err := sc.BeginStream(ctx, chatID, sessionKey)
 	if err != nil {
 		logger.DebugCF("channels", "Streaming unavailable, falling back to placeholder", map[string]any{
 			"channel": channelName,
@@ -688,22 +688,53 @@ func (m *Manager) GetStreamer(ctx context.Context, channelName, chatID, sessionK
 		m.streamActive.Store(streamKey, true)
 		m.streamAuxiliaryTombstones.Store(streamKey, time.Now())
 	}
+	// [workflow-fork] relay channels (board: internal channels consumed by
+	// the channel's own fan-out relay) never use placeholders, typing
+	// indicators, or tool-feedback message tracking. Their streamer finalize
+	// must not arm the auxiliary tombstone / streamActive suppression, so a
+	// tool-call iteration that streamed+cancelled+finalized cannot cause
+	// preSend to drop the turn's tool-feedback frames.
+	isRelayChannel := constants.IsInternalChannel(channelName)
+	if isRelayChannel {
+		onFinalize = func(finalizeCtx context.Context, finalContent string) {
+			m.streamFinalContent.Store(streamKey, finalContent)
+		}
+	}
 
-	if m.config != nil && m.config.Agents.Defaults.SplitOnMarker {
+	if m.config != nil && m.config.Agents.Defaults.SplitOnMarker && !isRelayChannel {
 		return &splitMarkerStreamer{
-			current:     streamer,
-			reasoning:   reasoningStreamerFrom(streamer),
-			begin:       func(beginCtx context.Context) (bus.Streamer, error) { return sc.BeginStream(beginCtx, chatID) },
+			current:   streamer,
+			reasoning: reasoningStreamerFrom(streamer),
+			begin: func(beginCtx context.Context) (bus.Streamer, error) {
+				return sc.BeginStream(beginCtx, chatID, sessionKey)
+			},
 			onFinalize:  onFinalize,
 			clearMarker: clearMarker,
 		}, true
 	}
 
-	return &finalizeHookStreamer{
+	hooked := &finalizeHookStreamer{
 		Streamer:    streamer,
 		clearMarker: clearMarker,
 		onFinalize:  onFinalize,
-	}, true
+	}
+	if isRelayChannel {
+		return &relayStreamMarkerStreamer{finalizeHookStreamer: hooked}, true
+	}
+	return hooked, true
+}
+
+// relayStreamMarkerStreamer re-arms suppression markers when a new iteration
+// attaches its streamer (relay channels finalize their streamer mid-turn on
+// tool-call iterations; the manager must drop the suppression state those
+// finalizes would otherwise leave behind).
+type relayStreamMarkerStreamer struct {
+	*finalizeHookStreamer
+}
+
+func (s *relayStreamMarkerStreamer) Update(ctx context.Context, content string) error {
+	s.clearMarker()
+	return s.Streamer.Update(ctx, content)
 }
 
 func reasoningStreamerFrom(streamer bus.Streamer) bus.ReasoningStreamer {

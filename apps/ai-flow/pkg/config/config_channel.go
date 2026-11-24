@@ -39,6 +39,8 @@ const (
 	ChannelTeamsWebHook   = "teams_webhook"
 	ChannelMQTT           = "mqtt"
 	ChannelSlackWebHook   = "slack_webhook"
+	// [workflow-fork] P3-1: board 虚拟渠道类型名（与 pkg/channels/board.ChannelName 一致）。
+	ChannelBoard = "board"
 )
 
 func initChannel() {
@@ -682,6 +684,20 @@ var channelSettingsFactory = map[string]any{
 	ChannelTeamsWebHook:   (TeamsWebhookSettings{}),
 	ChannelMQTT:           (MQTTSettings{}),
 	ChannelSlackWebHook:   (SlackWebhookSettings{}),
+	// [workflow-fork] P3-1: board = board 前端 AI 侧栏虚拟渠道（内部渠道，由
+	// cmd/ai-flow 直接 RegisterChannel，不走 factory）。注册 settings 原型后，
+	// 配置里的 channels.board.settings.streaming 才能通过 InitChannelList 校验
+	// 并被 agent pipeline 的 channelStreamingConfig 读到（逐 token 流式开关）。
+	"board": (BoardSettings{}),
+}
+
+// BoardSettings are the settings for the [workflow-fork] "board" virtual
+// channel (board frontend AI sidebar, POST /chat SSE). The channel instance
+// itself is registered directly by cmd/ai-flow; this prototype only exists so
+// channels.board.settings (streaming toggles) validates in InitChannelList and
+// is readable by the agent pipeline's channelStreamingConfig.
+type BoardSettings struct {
+	Streaming StreamingConfig `json:"streaming,omitzero" yaml:"-"`
 }
 
 // RegisterChannelSettings registers a settings struct prototype for a custom

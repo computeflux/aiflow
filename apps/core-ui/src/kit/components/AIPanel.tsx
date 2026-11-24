@@ -596,7 +596,16 @@ export function AIPanel({
                 const decoder = new TextDecoder();
                 let buf = "";
                 for (;;) {
-                    const { done, value } = await reader.read();
+                    let done: boolean;
+                    let value: Uint8Array | undefined;
+                    try {
+                        ({ done, value } = await reader.read());
+                    } catch (err) {
+                        // 终态帧（result / error）已收到：流关闭竞态（服务端写完 result
+                        // 即断开，Chrome 偶发让末次 read() reject）视为正常结束。
+                        if (finalContent !== null || streamErr) break;
+                        throw err;
+                    }
                     if (done) break;
                     // 已取消（切页 / 卸载）：立即退出，不再处理后续帧
                     if (ac.signal.aborted) break;
@@ -615,6 +624,11 @@ export function AIPanel({
                         }
                         idx = buf.indexOf("\n\n");
                     }
+                    // 终态帧已到（result 或 error）：立即收尾，不再等流自然关闭。
+                    // （ai-flow 的 pump 写完 result 就 return，若期间有 keep-alive 注释帧
+                    // 抢跑、或服务端断开与末次 read() 竞态，前端会停在无 data 的帧上，
+                    // 表现为一直“生成中”/ 报 "Error in input stream"。）
+                    if (finalContent !== null || streamErr) break;
                 }
                 setStreamText("");
                 if (streamErr) throw new Error(streamErr);

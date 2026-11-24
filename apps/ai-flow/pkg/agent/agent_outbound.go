@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/computeflux/ai-flow/pkg/bus"
+	"github.com/computeflux/ai-flow/pkg/constants"
 	"github.com/computeflux/ai-flow/pkg/logger"
 	"github.com/computeflux/ai-flow/pkg/providers"
 	"github.com/computeflux/ai-flow/pkg/tools"
@@ -45,6 +46,15 @@ func (al *AgentLoop) PublishResponseIfNeeded(ctx context.Context, channel, chatI
 
 func (al *AgentLoop) publishResponseIfNeeded(ctx context.Context, channel, chatID, sessionKey, response string) {
 	if response == "" {
+		return
+	}
+	// [workflow-fork] P3-1: internal channels (board SSE) publish the turn's
+	// final content from runAgentLoop; a second publish here would deliver the
+	// final outbound twice (the duplicate arrives after the first finalized
+	// the turn and is dropped, and on the steering path it can race the
+	// relay's terminal signal). The agent loop's own steering-continuation
+	// reset re-enables publishing when needed.
+	if constants.IsInternalChannel(channel) {
 		return
 	}
 	// [workflow-fork] P3-1: propagate the active turn's request-scoped
