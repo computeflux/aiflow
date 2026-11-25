@@ -235,6 +235,29 @@ func (t *Turn) SendKeepAlive() {
 	t.enqueueFrame(Frame{Type: "keepalive"})
 }
 
+// Reopen re-arms a finished turn for steering continuations: it clears the
+// terminal signal (done/final/errMsg) and wakes the pump so the SSE stream
+// stays open while queued follow-ups run as continuation turns. Only a
+// relay/streamer terminal signal (a real turn completion) is reopenable; an
+// error terminal (watchdog timeout / streamer failure) stays closed. The
+// relay's final outbound re-finishes the turn when the continuation ends.
+func (t *Turn) Reopen() bool {
+	t.mu.Lock()
+	if !t.done || t.errMsg != "" {
+		t.mu.Unlock()
+		return false
+	}
+	t.done = false
+	t.final = ""
+	t.termSrc = ""
+	t.mu.Unlock()
+	select {
+	case t.notify <- struct{}{}:
+	default:
+	}
+	return true
+}
+
 // Finish marks the turn done (the pump emits the final result frame with
 // any captured mutation calls, using finalContent as the result content
 // when the model produced no streamed prose; a non-empty errMsg (streamer
@@ -628,6 +651,11 @@ func (c *Channel) BeginStream(ctx context.Context, chatID, sessionKey string) (c
 	if t == nil {
 		return nil, fmt.Errorf("board: no active turn for chat %s", chatID)
 	}
+	// [workflow-fork] P3-2: steering continuation turn attaching to a stream
+	// whose first turn already finalized (the streamer's relay final finished
+	// the turn): re-arm the terminal signal so the SSE stream stays open and
+	// the continuation's tokens flow into its originating stream.
+	t.Reopen()
 	st := newStreamer(ctx, t)
 	t.setStreamer(st)
 	// Re-arm the previous iteration's streamer (the pipeline cancels the
@@ -692,6 +720,18 @@ func (c *Channel) BoardTurnForSession(sessionKey string) *Turn {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.sessionTurn[sessionKey]
+}
+
+// Reopen implements agent.StreamChannelReopener: re-arms the active board
+// chat turn for the given agent-loop session key so its SSE stream stays
+// open while queued follow-ups run as steering continuations ([workflow-
+// fork] P3-2).
+func (c *Channel) Reopen(sessionKey string) bool {
+	t := c.BoardTurnForSession(sessionKey)
+	if t == nil {
+		return false
+	}
+	return t.Reopen()
 }
 
 // JWTFor returns the JWT attached to the active turn for a chat (empty when

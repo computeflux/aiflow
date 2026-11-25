@@ -117,6 +117,35 @@ func (al *AgentLoop) publishResponseIfNeeded(ctx context.Context, channel, chatI
 		})
 }
 
+// publishContinuationResponse publishes one steering-continuation answer to an
+// internal stream channel (board SSE). The continuation turn's own final
+// outbound is published from inside its runAgentLoop, but the relay resolves
+// that message's ValueCtx against the ORIGINAL request's turn, which is
+// already finished by the first turn's relay final — so it would be dropped.
+// This publish carries the originating request's publisher context (the
+// board turn) and is marked final so the relay's FinishFromRelay re-completes
+// the (re-opened) turn. ([workflow-fork] P3-2)
+func (al *AgentLoop) publishContinuationResponse(
+	ctx context.Context,
+	channel, chatID, sessionKey, content string,
+	valueCtx context.Context,
+) {
+	if strings.TrimSpace(content) == "" {
+		return
+	}
+	if channel == "" || chatID == "" {
+		return
+	}
+	msg := bus.OutboundMessage{
+		Context:    bus.NewOutboundContext(channel, chatID, ""),
+		SessionKey: sessionKey,
+		Content:    content,
+	}
+	msg.Context.ValueCtx = valueCtx
+	markFinalOutbound(&msg)
+	_ = al.bus.PublishOutbound(ctx, msg)
+}
+
 func (al *AgentLoop) targetReasoningChannelID(channelName string) (chatID string) {
 	if al.channelManager == nil {
 		return ""

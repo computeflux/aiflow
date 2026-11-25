@@ -35,6 +35,102 @@ function fmtJSON(v: unknown): string {
   }
 }
 
+type ReviewCommentView = { file?: string; line?: number; level?: string; message?: string };
+
+// parseReviewValue 解析 reviewer 原始输出（DB review 列可能是对象或 JSON 字符串）。
+// structured=false 表示旧数据/非协议输出：保持原文展示。
+function parseReviewValue(v: unknown): { ok?: boolean; comments: ReviewCommentView[]; structured: boolean } {
+  let data: unknown = v;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t || t === "null") return { comments: [], structured: false };
+    try {
+      data = JSON.parse(t);
+    } catch {
+      return { comments: [], structured: false };
+    }
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return { comments: [], structured: false };
+  const obj = data as Record<string, unknown>;
+  return {
+    ok: typeof obj.ok === "boolean" ? obj.ok : undefined,
+    comments: Array.isArray(obj.comments) ? (obj.comments as ReviewCommentView[]) : [],
+    structured: typeof obj.ok === "boolean" || Array.isArray(obj.comments),
+  };
+}
+
+function reviewLevelClass(level?: string): string {
+  switch ((level || "").toLowerCase()) {
+    case "error":
+      return "text-(--danger)";
+    case "warning":
+    case "warn":
+      return "text-(--warning)";
+    case "info":
+      return "text-(--info)";
+    default:
+      return "text-(--text-secondary)";
+  }
+}
+
+// ReviewBlock reviewer 审核结果：协议 JSON 渲染为结论 + 行级评论，不再直接糊原始 JSON。
+function ReviewBlock({ value }: { value: unknown }) {
+  if (value === null || value === undefined) return null;
+  const rv = parseReviewValue(value);
+  if (!rv.structured) {
+    return (
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-(--text-muted) mb-1">review（原始输出）</div>
+        <pre className="text-[10px] bg-black/40 border border-(--border-default) p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all text-(--text-secondary)">{fmtJSON(value)}</pre>
+      </div>
+    );
+  }
+  const errors = rv.comments.filter((c) => (c.level || "").toLowerCase() === "error").length;
+  const warns = rv.comments.filter((c) => ["warning", "warn"].includes((c.level || "").toLowerCase())).length;
+  return (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-(--text-muted) mb-1">review（行级评论）</div>
+      <div className="flex items-center gap-3 flex-wrap text-[10px] mb-1">
+        <span>
+          结论：
+          {rv.ok === true ? (
+            <span className="text-(--ok) font-bold">通过</span>
+          ) : rv.ok === false ? (
+            <span className="text-(--danger) font-bold">不通过</span>
+          ) : (
+            <span>未知</span>
+          )}
+        </span>
+        <span>评论 {rv.comments.length} 条</span>
+        {errors > 0 && <span className="text-(--danger)">error {errors}</span>}
+        {warns > 0 && <span className="text-(--warning)">warning {warns}</span>}
+      </div>
+      {rv.comments.length > 0 ? (
+        <div className="space-y-1.5">
+          {rv.comments.map((c, i) => (
+            <div key={i} className="border-l-2 border-(--border-default) pl-2">
+              <div className="flex items-baseline gap-2 flex-wrap text-[10px]">
+                <span className={`font-bold ${reviewLevelClass(c.level)}`}>{(c.level || "info").toUpperCase()}</span>
+                {c.file && (
+                  <span className="font-mono text-(--text-muted)">
+                    {c.file}
+                    {c.line ? `:${c.line}` : ""}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-(--text-secondary) whitespace-pre-wrap mt-0.5">{c.message || ""}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={`text-[11px] ${rv.ok === false ? "text-(--danger)" : "text-(--ok)"}`}>
+          {rv.ok === false ? "未通过，但 reviewer 未给出逐条意见" : "审核通过，无逐条意见"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function statusClass(status: string): string {
   const map: Record<string, string> = {
     open: "text-white border-white",
@@ -310,10 +406,7 @@ export function Agents() {
                             </div>
                           )}
                           {taskDetail.review !== null && taskDetail.review !== undefined && (
-                            <div>
-                              <div className="text-[10px] font-bold uppercase tracking-widest text-(--text-muted) mb-1">review（行级评论）</div>
-                              <pre className="text-[10px] bg-black/40 border border-(--border-default) p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all text-(--text-secondary)">{fmtJSON(taskDetail.review)}</pre>
-                            </div>
+                            <ReviewBlock value={taskDetail.review} />
                           )}
                           {taskDetail.test_report && (
                             <div>

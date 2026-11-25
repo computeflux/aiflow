@@ -32,6 +32,22 @@ func SetBoardTurnResolver(fn func(ctx context.Context) *BoardTurnInfo) {
 	boardTurnResolver = fn
 }
 
+// StreamChannelReopener re-arms a stream channel turn's terminal signal so an
+// SSE stream stays open while queued follow-ups run as steering continuations
+// (implemented by the board channel's Turn; installed via
+// SetStreamChannelReopener; pkg/agent cannot import pkg/channels/board).
+type StreamChannelReopener interface {
+	Reopen(sessionKey string) bool
+}
+
+var streamChannelReopener StreamChannelReopener
+
+// SetStreamChannelReopener installs the stream-channel turn re-arming hook
+// (set by cmd at startup).
+func SetStreamChannelReopener(r StreamChannelReopener) {
+	streamChannelReopener = r
+}
+
 // on top of dst, without inheriting src's cancellation/deadline. Used by
 // runTurn to propagate the inbound publisher's values (e.g. the board chat
 // turn) into the turn execution context. ([workflow-fork] P3-1)
@@ -280,8 +296,16 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 				turnStatus = TurnEndStatusError
 				return turnResult{}, fmt.Errorf("hook requested turn abort")
 			}
-			// Ensure empty response falls back to DefaultResponse
+			// Ensure empty response falls back to DefaultResponse.
+			// [workflow-fork] P3-3: on SSE-stream channels (board) the streamed token
+			// frames are the verbatim answer; a generic "The model returned an empty
+			// response…" filler must not masquerade as the assistant's reply. Emit a
+			// real error frame instead so the UI shows an actionable failure.
 			if finalContent == "" {
+				if isStreamChannel(ts.channel) {
+					turnStatus = TurnEndStatusError
+					return turnResult{}, fmt.Errorf("model returned an empty response (provider error or token limit)")
+				}
 				finalContent = ts.opts.DefaultResponse
 			}
 			result, finalizeErr := pipeline.Finalize(ctx, turnCtx, ts, exec, turnStatus, finalContent)
@@ -332,6 +356,11 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 	if finalContent == "" {
 		if ts.currentIteration() >= ts.agent.MaxIterations && ts.agent.MaxIterations > 0 {
 			finalContent = toolLimitResponse
+		} else if isStreamChannel(ts.channel) {
+			// [workflow-fork] P3-3: same as the ControlBreak path — SSE-stream
+			// channels get an error frame, not the empty-response filler.
+			turnStatus = TurnEndStatusError
+			return turnResult{}, fmt.Errorf("model returned an empty response (provider error or token limit)")
 		} else {
 			finalContent = ts.opts.DefaultResponse
 		}
