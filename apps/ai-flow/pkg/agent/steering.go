@@ -315,6 +315,7 @@ func (al *AgentLoop) continueWithSteeringMessages(
 	sessionKey, channel, chatID string,
 	scope *session.SessionScope,
 	steeringMsgs []providers.Message,
+	valueCtx ...context.Context,
 ) (string, error) {
 	dispatch := DispatchRequest{
 		SessionKey:   sessionKey,
@@ -326,6 +327,12 @@ func (al *AgentLoop) continueWithSteeringMessages(
 			ChatID:   chatID,
 			ChatType: inferChatTypeFromSessionScope(scope),
 		}
+	}
+	// [workflow-fork] P3-2: carry the originating request's publisher context
+	// (board SSE turn) so the continuation turn's final outbound resolves back
+	// to the original stream.
+	if len(valueCtx) > 0 && valueCtx[0] != nil {
+		dispatch.InboundContext.ValueCtx = valueCtx[0]
 	}
 	return al.runAgentLoop(ctx, agent, processOptions{
 		Dispatch:                dispatch,
@@ -367,8 +374,19 @@ func (al *AgentLoop) agentForSession(sessionKey string) *AgentInstance {
 // message was from the assistant (i.e., it has stopped processing) and the
 // user has since enqueued steering messages.
 //
-// If no steering messages are pending, it returns an empty string.
-func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID string) (string, error) {
+// Returns the last continuation's response plus the consumed steering messages
+// (re-wrapped as inbound messages carrying the request-scoped valueCtx so
+// internal-channel relay publishing can route each answer back to its
+// originating stream). If no steering messages are pending, both are empty.
+func (al *AgentLoop) Continue(
+	ctx context.Context,
+	sessionKey, channel, chatID string,
+	valueCtx ...context.Context,
+) (string, []bus.InboundMessage, error) {
+	var reqValueCtx context.Context
+	if len(valueCtx) > 0 {
+		reqValueCtx = valueCtx[0]
+	}
 	// Claim the session with a unique placeholder to prevent a TOCTOU race where two
 	// concurrent Continue calls for the same session both pass the active-turn
 	// check and create parallel turns. The placeholder is replaced by the real
@@ -379,31 +397,36 @@ func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID s
 	}
 	if _, loaded := al.activeTurnStates.LoadOrStore(sessionKey, placeholder); loaded {
 		if active := al.GetActiveTurnBySession(sessionKey); active != nil {
-			return "", fmt.Errorf("turn %s is still active for session %q", active.TurnID, sessionKey)
+			return "", nil, fmt.Errorf("turn %s is still active for session %q", active.TurnID, sessionKey)
 		}
 		// Another Continue just claimed the slot; let it handle the steering.
-		return "", nil
+		return "", nil, nil
 	}
+	// Release the slot on every early-return path; on success the continuation
+	// turn's runTurn owns the slot (registerActiveTurn replaces the
+	// placeholder, its deferred clearActiveTurn releases it).
+	claimed := true
+	defer func() {
+		if claimed {
+			al.activeTurnStates.Delete(sessionKey)
+		}
+	}()
 
 	if err := al.ensureHooksInitialized(ctx); err != nil {
-		al.activeTurnStates.Delete(sessionKey)
-		return "", err
+		return "", nil, err
 	}
 	if err := al.ensureMCPInitialized(ctx); err != nil {
-		al.activeTurnStates.Delete(sessionKey)
-		return "", err
+		return "", nil, err
 	}
 
 	steeringMsgs := al.dequeueSteeringMessagesForScopeWithFallback(sessionKey)
 	if len(steeringMsgs) == 0 {
-		al.activeTurnStates.Delete(sessionKey)
-		return "", nil
+		return "", nil, nil
 	}
 
 	agent := al.agentForSession(sessionKey)
 	if agent == nil {
-		al.activeTurnStates.Delete(sessionKey)
-		return "", fmt.Errorf("no agent available for session %q", sessionKey)
+		return "", nil, fmt.Errorf("no agent available for session %q", sessionKey)
 	}
 
 	if tool, ok := agent.Tools.Get("message"); ok {
@@ -417,7 +440,26 @@ func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID s
 		scope = metaStore.GetSessionScope(sessionKey)
 	}
 
-	return al.continueWithSteeringMessages(ctx, agent, sessionKey, channel, chatID, scope, steeringMsgs)
+	resp, err := al.continueWithSteeringMessages(ctx, agent, sessionKey, channel, chatID, scope, steeringMsgs, reqValueCtx)
+	claimed = false
+	if err != nil {
+		return resp, nil, err
+	}
+	// One consumed batch per continuation turn: carry the batch's answer (the
+	// loop returns only the last response) so internal-channel relay publishing
+	// can deliver every queued follow-up's answer back to its originating stream.
+	consumed := make([]bus.InboundMessage, 0, len(steeringMsgs))
+	for i := range steeringMsgs {
+		content := ""
+		if i == len(steeringMsgs)-1 {
+			content = resp
+		}
+		consumed = append(consumed, bus.InboundMessage{
+			Context: bus.InboundContext{Channel: channel, ChatID: chatID},
+			Content: content,
+		})
+	}
+	return resp, consumed, nil
 }
 
 func (al *AgentLoop) InterruptGraceful(hint string) error {

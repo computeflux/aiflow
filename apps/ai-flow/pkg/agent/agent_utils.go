@@ -19,6 +19,14 @@ import (
 	"github.com/computeflux/ai-flow/pkg/utils"
 )
 
+// isStreamChannel reports whether a channel delivers assistant answers as
+// verbatim token streams (board SSE chat). For these channels an empty LLM
+// response must surface as an actionable error, never as the generic
+// empty-response filler text ([workflow-fork] P3-3).
+func isStreamChannel(channel string) bool {
+	return channel == "board"
+}
+
 // outboundContextFromInbound builds an outbound context. The optional
 // turnCtx (variadic for call-site compatibility) is attached as ValueCtx so
 // in-process channel consumers can resolve request-scoped values from the

@@ -156,25 +156,29 @@ interface ReviewView {
     ok?: boolean;
     comments: ReviewComment[];
     raw: string;
+    /** 输出符合 reviewer 协议（能读到 ok/comments）：false 时弹窗回退展示原文（旧数据/异常输出） */
+    structured: boolean;
     /** 本轮 ocr 会话 ID（reviewer_done detail.sessions，2026-11-11 起）：审查过程页深链用 */
     sessions?: string[];
 }
-// parseReview 解析 reviewer 输出（{"ok":bool,"comments":[{file,line,level,message}]}）。
-// 非 JSON（旧数据 / 异常输出）→ 返回空 comments，由调用方回退展示原文。
-function parseReview(raw: string): { ok?: boolean; comments: ReviewComment[] } {
-    if (!raw) return { comments: [] };
+// parseReview 解析 reviewer 输出（{"ok":bool,"comments":[{file,line,level,message}],"sessions":[...]}）。
+// structured=false（非 JSON / 非对象 / 无协议字段）→ 由调用方回退展示原文。
+function parseReview(raw: string): { ok?: boolean; comments: ReviewComment[]; sessions?: string[]; structured: boolean } {
+    if (!raw) return { comments: [], structured: false };
     try {
         const v = JSON.parse(raw);
-        if (v && typeof v === "object") {
+        if (v && typeof v === "object" && !Array.isArray(v)) {
             return {
                 ok: typeof v.ok === "boolean" ? v.ok : undefined,
                 comments: Array.isArray(v.comments) ? v.comments : [],
+                sessions: Array.isArray(v.sessions) ? (v.sessions as string[]) : undefined,
+                structured: typeof v.ok === "boolean" || Array.isArray(v.comments),
             };
         }
     } catch {
         /* 非 JSON → 原文展示 */
     }
-    return { comments: [] };
+    return { comments: [], structured: false };
 }
 // hasReview 是否真有 reviewer 记录：MySQL JSON 列的空值会读成字面量 "null"，
 // 不能只看非空串，否则每条执行记录都会多出一个点开只有 null 的按钮。
@@ -201,7 +205,8 @@ function reviewFromEvent(e: ExecutionEvent, ex: CardExecution, isLastRound: bool
         ok: parsed.ok,
         comments: parsed.comments,
         raw,
-        sessions: Array.isArray(d?.sessions) ? (d!.sessions as string[]) : undefined,
+        structured: parsed.structured,
+        sessions: Array.isArray(d?.sessions) ? (d!.sessions as string[]) : parsed.sessions,
     };
 }
 function reviewLevelCls(level?: string): string {
@@ -2205,6 +2210,33 @@ export function BoardPage({ initialBoardName }: { initialBoardName?: string } = 
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : reviewView.structured ? (
+              <div className="p-6 text-center space-y-2">
+                <p
+                  className={`text-sm font-bold ${reviewView.ok === false ? "text-(--danger)" : reviewView.ok === true ? "text-(--ok)" : "text-(--text-secondary)"}`}
+                >
+                  {reviewView.ok === true
+                    ? "本轮审核通过，无逐条意见"
+                    : reviewView.ok === false
+                      ? "本轮审核未通过，reviewer 未给出逐条意见"
+                      : "本轮审核无逐条意见"}
+                </p>
+                <p className="text-[11px] text-(--text-muted)">
+                  {reviewView.ok === false
+                    ? "可展开下方原始输出排查，或点右上「审查过程」回看会话记录。"
+                    : (reviewView.sessions?.length ?? 0) > 0
+                      ? `已记录 ${reviewView.sessions!.length} 个审查会话，点右上「审查过程」可回看本轮完整过程。`
+                      : "reviewer 未产生行级评论。"}
+                </p>
+                <details className="text-left">
+                  <summary className="cursor-pointer text-[10px] text-(--text-muted) hover:text-white select-none">
+                    原始输出（JSON）
+                  </summary>
+                  <pre className="mt-1 p-2 bg-black/30 border border-(--border-subtle) text-[10px] font-mono whitespace-pre-wrap break-all text-(--text-secondary) max-h-64 overflow-auto">
+                    {reviewView.raw}
+                  </pre>
+                </details>
               </div>
             ) : (
               <div className="p-4 max-h-[65vh] overflow-auto text-[11px] font-mono whitespace-pre-wrap text-(--text-secondary)">

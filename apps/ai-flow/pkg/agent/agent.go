@@ -299,7 +299,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 						Channel:    m.Channel,
 						ChatID:     m.ChatID,
 					}
-					continued, continueErr := al.drainQueuedSteeringContinuations(ctx, target)
+					continued, _, continueErr := al.drainQueuedSteeringContinuations(ctx, target)
 					if continueErr != nil {
 						al.maybePublishError(ctx, m.Channel, m.ChatID, sessionKey, continueErr)
 						return

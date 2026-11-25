@@ -13,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/wetee/ai-workflow/internal/config"
+	"github.com/wetee/ai-workflow/internal/db"
 )
 
 // OCREnv reviewer adapter 运行环境（driver 经 env 注入 + 容器 env 兜底）。
@@ -80,6 +83,9 @@ func RunOCR(in io.Reader, stdout, stderr io.Writer) error {
 		// 必须显式提供 provider：ocr 无配置时会在 /dev/tty 交互式提示而挂起
 		return p.fail("reviewer provider not configured: set OCR_PROVIDER env or run 'ocr config provider'")
 	}
+	normalizeOCRProvider(p.stderr)
+	env.Provider = strings.TrimSpace(os.Getenv("OCR_PROVIDER"))
+	env.Model = strings.TrimSpace(os.Getenv("OCR_MODEL"))
 	EnsureSafeDirectory(input.Workdir)
 
 	timeout := env.TimeoutSec
@@ -207,6 +213,53 @@ func sessionList(m map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// normalizeOCRProvider provider 归一（S8 模型管理，与 evolve-driver/pi 同源规则）：
+// OCR_MODEL + OCR_BASE_URL 命中 model_profiles（sync_agents=1，即已同步进宿主
+// ~/.opencodereview/config.json 的 "model-managed/<档案名>" 子 provider）的档案时，
+// 把 OCR_PROVIDER 改写为 "model-managed/<档案名>"、OCR_MODEL 改写为档案 model；
+// 未命中（档案不存在 / 端点不匹配 / DB 不可达）保持原值（宿主 config.json 手工维护
+// 的 provider，如 local）。
+//
+// 背景：ocr 的 custom provider "model-managed" 父 provider 只聚合 models 列表、无
+// url（多档案多 endpoint），用它当 --provider 会被拒：
+// "custom provider \"model-managed\" requires a url field for protocol \"openai\""；
+// 必须指向带 endpoint 的子 provider（model-managed/<档案名>）。
+func normalizeOCRProvider(logw io.Writer) {
+	if strings.TrimSpace(os.Getenv("MYSQL_HOST")) == "" {
+		return // adapter 独立运行且无 DB 配置：无法归一，保持 env
+	}
+	cfg := config.Load()
+	dbHandle, err := db.Open(cfg)
+	if err != nil {
+		fmt.Fprintf(logw, "provider-normalize: mysql 连接失败，保持 OCR_PROVIDER=%s: %v\n", os.Getenv("OCR_PROVIDER"), err)
+		return
+	}
+	defer func() {
+		if sqlDB, err := dbHandle.DB.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	}()
+	var p db.ModelProfile
+	q := dbHandle.Where("sync_agents = 1 AND model = ?", strings.TrimSpace(os.Getenv("OCR_MODEL")))
+	if base := strings.TrimSpace(os.Getenv("OCR_BASE_URL")); base != "" {
+		q = q.Where("base_url = ?", base)
+	}
+	if err := q.Order("active DESC, id").First(&p).Error; err != nil {
+		return // 未命中档案：保持 env
+	}
+	want := "model-managed/" + p.Name // 与 approval.managedProviderName 同值（跨包不导出）
+	if os.Getenv("OCR_PROVIDER") != want {
+		fmt.Fprintf(logw, "provider-normalize: OCR_PROVIDER %q → %q（档案 %q，model %q）\n",
+			os.Getenv("OCR_PROVIDER"), want, p.Name, p.Model)
+		_ = os.Setenv("OCR_PROVIDER", want)
+	}
+	if os.Getenv("OCR_MODEL") != p.Model {
+		fmt.Fprintf(logw, "provider-normalize: OCR_MODEL %q → %q（档案 %q）\n",
+			os.Getenv("OCR_MODEL"), p.Model, p.Name)
+		_ = os.Setenv("OCR_MODEL", p.Model)
+	}
 }
 
 // runOCRRepo 在单个 git 仓库（主仓库或子仓库 worktree）内跑 ocr，返回原始 JSON 输出。

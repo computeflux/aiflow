@@ -222,6 +222,7 @@ func runGateway(args []string) int {
 	rt.boardChannel = board.New(rt.bus)
 	rt.boardHandler = board.NewHandler(rt.boardChannel, rt.bus, board.Options{})
 	rt.agentLoop.WithBoardTools(board.NewMutationTools, board.NewIdentityHook(rt.boardChannel))
+	agent.SetStreamChannelReopener(rt.boardChannel)
 	agent.SetBoardTurnResolver(func(ctx context.Context) *agent.BoardTurnInfo {
 		t := board.TurnFromContext(ctx)
 		if t == nil {
