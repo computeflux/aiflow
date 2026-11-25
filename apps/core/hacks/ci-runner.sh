@@ -4,7 +4,9 @@
 #   go build ./cmd/... ./internal/...（契约：接口签名可编译）+ go test 同范围（主模块，apps/core）
 #   注：不用 ./... —— deploy/Dockerfile.go 会被当 Go 源解析；-buildvcs=false（只读挂载无 git 状态）
 #   + .venv/python/bin/python -m pytest（apps/ 下每个 python 项目；.venv + 自包含 uv python 树
-#     由 evolve-driver syncVenvs 拷入 worktree；各出一份 JUnit XML）
+#     由 evolve-driver syncVenvs 拷入 worktree；各出一份 JUnit XML）。
+#     无 .venv 时的兜底口径见下方循环注释（无 pytest 用例→no_tests；有→镜像内置系统
+#     python3-pytest 只跑含 def test_ 的文件；两者都不满足→失败）。
 #
 # 输入：$1 = task_no
 # 输出：
@@ -70,10 +72,49 @@ for d in "$REPO"/apps/*/; do
     continue
   fi
   name="$(basename "$d")"
-  # .venv 缺失 = 无法验证该应用测试 → 失败（不放行未验证的变更）
+  # .venv 缺失时的三档口径（与沙箱 pytest 口径一致，均留痕）：
+  #   1) 项目里没有任何 pytest 可收集用例（无任何 def test_，含缩进类方法式；
+  #      全是手工脚本）→ 等价 pytest exit 5：记入 no_tests，不计失败。
+  #   2) 有 pytest 用例且系统 python3 自带 pytest（CI 镜像内置解释器）
+  #      → 用系统 pytest 跑（pycraper 的测试自带依赖 stub，可离线收集/执行）；
+  #        失败计 FAILED，未收集到用例（exit 5）记 no_tests。
+  #   3) 有 pytest 用例、无 .venv、无系统 pytest → 无法验证 → 失败（不放行未验证的变更）。
+  # “有无用例”与“能否执行”两个决策共用同一份 HERMETIC 收集结果（同一 find + grep
+  # 口径，缩进类方法式 test 也算用例）：不得用另一套更窄的 grep 先短路，否则
+  # “有用例但无 pytest”会被降级成 no_tests 放行（“测试没跑还全绿”）。
   if [ ! -x "$d/.venv/python/bin/python" ]; then
-    echo ">>> $d: no .venv, cannot run python tests"
-    FAILED=1
+    HERMETIC=()
+    while IFS= read -r tf; do
+      grep -qE '^[[:space:]]*(async )?def test_' "$tf" || continue   # 无任何 test_ 的手工脚本排除
+      # 注：不按“含 async def main”整文件排除——混写文件里的 test_* 是 hermetic 单测，
+      # pytest 导入模块也不会执行 main（受 if __name__ == "__main__" 保护）。
+      HERMETIC+=("$tf")
+    done < <(find "$d" -name .venv -prune -o -name 'test_*.py' -print 2>/dev/null)
+    if [ "${#HERMETIC[@]}" -eq 0 ]; then
+      echo ">>> $name: no pytest tests (manual scripts only) → 记入 no_tests，不计失败" >&2
+      NO_TESTS="$NO_TESTS $name"
+      continue
+    fi
+    # 系统 pytest（镜像内置解释器，deploy/Dockerfile.ci 预装 python3-pytest/pydantic）。
+    # 不用 uv 在线自举：/work 只读挂载下唯一可写的是 /cache/ci 卷，引导 venv 建在卷内
+    # 会污染 JUnit XML 汇总的 glob（task_no-*.xml 同目录），且自举网络失败时行为不可控。
+    if python3 -c 'import pytest' >/dev/null 2>&1; then
+      echo ">>> python3 -m pytest $name（无 .venv，系统 pytest 兜底；只跑含 def test_ 的文件，纯手工脚本不收集）"
+      if (cd "$d" && PYTEST_ADDOPTS="-p no:cacheprovider" python3 -m pytest "${HERMETIC[@]}" --junitxml "$OUT_DIR/$TASK_NO-$name.xml" -q); then
+        :
+      else
+        rc=$?
+        if [ "$rc" -eq 5 ]; then
+          echo ">>> $name: pytest collected 0 tests (exit 5) → 记入 no_tests，不计失败" >&2
+          NO_TESTS="$NO_TESTS $name"
+        else
+          FAILED=1
+        fi
+      fi
+    else
+      echo ">>> $d: no .venv, cannot run python tests"
+      FAILED=1
+    fi
     continue
   fi
   	echo ">>> .venv/python/bin/python -m pytest $name"

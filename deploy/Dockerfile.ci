@@ -5,18 +5,27 @@
 #   go build ./...（契约）+ go test ./...（gotestsum → JUnit XML）
 #   + .venv/bin/python -m pytest（apps/ 下 python 项目，.venv 由 evolve-driver 拷入 worktree → JUnit XML）
 # 仓库 worktree 挂 /work（只读）；JUnit XML 落 ci-cache 卷（/cache/ci）。
-FROM golang:1.26
+#
+# 基座 Go ≥ 1.27：apps/social 依赖 liaogx/douyin-mcp（go.mod 要求 go ≥ 1.27.1，
+# 模块级 vendor + toolchain 固定）；golang:1.26 + GOTOOLCHAIN=local 下其构建会报
+# 「requires go >= 1.27.1」（contract fail）。升基座是正规解，不靠手工改 vendor 标注。
+FROM golang:1.27
 WORKDIR /ci
 # go module 缓存（构建期预下载，CI 运行期 go mod download 秒级命中；主模块已迁 apps/core）
 COPY apps/core/go.mod apps/core/go.sum ./
 RUN go mod download
-# python + uv（uv run --no-sync pytest）
-RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+# python + uv（uv run --no-sync pytest）+ pytest（系统解释器兜底：worktree 无 .venv 时
+# ci-runner.sh 用 `python3 -m pytest` 跑 apps/* 的 pytest 用例；pycraper/pyreplay 的
+# 单测自带第三方依赖 stub，离线可收集可执行；没 pytest 就只能对“有测试却无环境”报失败）
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pytest python3-pydantic \
     && rm -rf /var/lib/apt/lists/* \
     && curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 # gotestsum：go test -json → JUnit XML
 RUN go install gotest.tools/gotestsum@v1.13.0   # 模块已迁移至 gotest.tools（仓库 gotestyourself/gotestsum）；v1.11 的旧 x/tools 无法在 Go 1.26 下编译
+# ⚠️ 脚本改动必须重建本镜像才生效：evolve-driver 跑的是镜像内置 /hacks/ci-runner.sh，
+# /work 是只读挂载、不会覆盖它。改完 hacks/ci-runner.sh 后：
+#   cd deploy && docker build -t computeflux/ci-runner:latest -f Dockerfile.ci ..
 COPY apps/core/hacks/ci-runner.sh /hacks/ci-runner.sh
 RUN chmod +x /hacks/ci-runner.sh
 ENTRYPOINT ["/hacks/ci-runner.sh"]

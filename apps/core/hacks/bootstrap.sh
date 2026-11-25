@@ -1,6 +1,6 @@
 #!/bin/bash
-# 数据库 bootstrap：顺序执行 hacks/sql/ 下全部 DDL（S1 起，docs/plan/S1-进化闭环.md §3.1）。
-# 旧版（systemd 单元安装 + docker-workers.sh）已随 S0 退役——服务一律走统一 compose：
+#数
+库 bootstrap：顺序执行 hacks/sql/ 下全部 DDL（S1 起，docs/plan/S1-进化闭环.md §3.1）。\]# 旧版（systemd 单元安装 + docker-workers.sh）已随 S0 退役——服务一律走统一 compose：
 #   cd deploy && docker compose up -d --build
 #
 # 用法（仓库根目录）：
