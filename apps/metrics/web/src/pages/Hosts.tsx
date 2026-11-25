@@ -15,7 +15,7 @@ import {
   removeHost,
   type StatusData,
 } from "../api";
-import { Badge, fmtDays, formatTime } from "../lib/status";
+import { Badge, fmtDays, formatTime, targetName } from "../lib/status";
 
 export function Hosts() {
   const [data, setData] = useState<StatusData | null>(null);
@@ -62,7 +62,7 @@ export function Hosts() {
   };
 
   const doRemove = async (host: string) => {
-    if (!confirm(`确认删除监控域名 ${host}?`)) return;
+    if (!confirm(`确认删除监控目标 ${host}?`)) return;
     setBusy(host);
     setMsg(null);
     try {
@@ -112,7 +112,7 @@ export function Hosts() {
             value={newHost}
             onChange={(e) => setNewHost(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doAdd()}
-            placeholder="new.example.com"
+            placeholder="new.example.com 或 new.example.com:8443"
             spellCheck={false}
             className="flex-1 bg-transparent py-2 text-sm font-mono outline-none"
           />
@@ -171,8 +171,8 @@ export function Hosts() {
             </thead>
             <tbody className="divide-y divide-(--border-divider)">
               {hosts.map((r) => (
-                <tr key={r.host} className="hover:bg-(--bg-elevated)">
-                  <td className="px-4 py-3 font-bold font-mono text-xs">{r.host}</td>
+                <tr key={targetName(r)} className="hover:bg-(--bg-elevated)">
+                  <td className="px-4 py-3 font-bold font-mono text-xs">{targetName(r)}</td>
                   <td className="px-4 py-3">
                     <Badge status={r.status} />
                   </td>
@@ -185,12 +185,12 @@ export function Hosts() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <button
-                      onClick={() => doRemove(r.host)}
+                      onClick={() => doRemove(targetName(r))}
                       disabled={busy !== null}
-                      title={`删除 ${r.host}`}
+                      title={`删除 ${targetName(r)}`}
                       className="border border-(--border-subtle) px-2.5 py-1 text-xs font-bold text-(--danger) hover:bg-(--bg-elevated) transition disabled:opacity-40"
                     >
-                      {busy === r.host ? (
+                      {busy === targetName(r) ? (
                         <Loader2 className="h-3 w-3 animate-spin inline" />
                       ) : (
                         <Trash2 className="h-3 w-3 inline" />
@@ -206,8 +206,10 @@ export function Hosts() {
       </div>
 
       <p className="mt-3 text-xs text-(--text-muted)">
-        说明: 新域名需已解析到本机且 443 端口有 TLS 证书, 否则监控显示 ERROR; 自动续签(Let's Encrypt
-        DNS-01)要求域名在阿里云 DNS 下且 <code className="font-mono">renewal.email</code> 非空。
+        说明: 条目可带端口(如 <code className="font-mono">example.com:8443</code>, 同一域名可监控多个端口),
+        不带端口时用全局 <code className="font-mono">port</code>(默认 443); 域名需已解析且对应端口有 TLS 证书,
+        否则监控显示 ERROR; 自动续签(Let's Encrypt DNS-01)只对域名签发(与端口无关),
+        要求域名在阿里云 DNS 下且 <code className="font-mono">renewal.email</code> 非空。
       </p>
     </div>
   );

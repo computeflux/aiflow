@@ -65,6 +65,7 @@ type certMeta struct {
 // renewalInfo 是单个主机的续签状态(/api/status 的 renewals 字段)。
 type renewalInfo struct {
 	Host         string  `json:"host"`
+	Port         int     `json:"port,omitempty"` // 监控目标端口(与证书监控一致; 续签只对域名签发, 端口仅用于展示对应)
 	DaysLeft     float64 `json:"days_left"`
 	Due          bool    `json:"due"`        // 达到自动续签阈值
 	CertReady    bool    `json:"cert_ready"` // 已有新证书可下载
@@ -92,9 +93,18 @@ func (r *renews) renewalCfg() renewalConfig {
 	return rc
 }
 
-// monitoredHosts 返回当前生效的监控主机列表(续签白名单校验用)。
+// monitoredHosts 返回当前生效的监控主机列表(续签白名单校验用;
+// host:port 条目只取主机名——ACME 只对域名签发, 与端口无关)。
 func (r *renews) monitoredHosts() []string {
-	return effectiveHosts(r.store.get())
+	var out []string
+	for _, entry := range effectiveHosts(r.store.get()) {
+		host, _, err := splitHostPortEntry(entry)
+		if err != nil {
+			host = entry
+		}
+		out = append(out, host)
+	}
+	return out
 }
 
 func newRenewer(store configStore) *renews {
@@ -271,12 +281,17 @@ func (r *renews) autoRenew(cache *statusCache) {
 	}
 	reports, _, _ := cache.get()
 	for _, rep := range reports {
+		// 同一域名可能监控多个端口, 续签只对域名(ACME DNS-01)执行一次
+		host := rep.Host
+		if _, _, err := splitHostPortEntry(host); err != nil {
+			continue // 非法条目(已在监控报告中标错), 不参与续签
+		}
 		if rep.Status == statusError || rep.DaysLeft > float64(rc.Days) {
 			continue
 		}
 		// 本地新证书仍有效(超过阈值)则跳过, 避免重复签发触发 LE 速率限制
 		r.mu.Lock()
-		inf, ok := r.info[rep.Host]
+		inf, ok := r.info[host]
 		r.mu.Unlock()
 		if ok && inf.CertReady {
 			if t, err := time.Parse(time.RFC3339, inf.CertNotAfter); err == nil &&
@@ -284,20 +299,20 @@ func (r *renews) autoRenew(cache *statusCache) {
 				continue
 			}
 		}
-		fmt.Printf("[renew] %s 剩余 %.1f 天 <= %d 天, 开始续签...\n", rep.Host, rep.DaysLeft, rc.Days)
-		notAfter, err := r.issue(rep.Host)
+		fmt.Printf("[renew] %s 剩余 %.1f 天 <= %d 天, 开始续签...\n", reportKey(rep), rep.DaysLeft, rc.Days)
+		notAfter, err := r.issue(host)
 		if err != nil {
-			fmt.Printf("[renew] %s 续签失败: %v\n", rep.Host, err)
+			fmt.Printf("[renew] %s 续签失败: %v\n", reportKey(rep), err)
 			r.mu.Lock()
-			r.info[rep.Host] = &renewalInfo{
-				Host:      rep.Host,
+			r.info[host] = &renewalInfo{
+				Host:      host,
 				LastTry:   time.Now().UTC().Format(time.RFC3339),
 				LastError: err.Error(),
 			}
 			r.mu.Unlock()
 			continue
 		}
-		fmt.Printf("[renew] %s 续签成功, 新证书到期 %s\n", rep.Host, notAfter)
+		fmt.Printf("[renew] %s 续签成功, 新证书到期 %s\n", reportKey(rep), notAfter)
 	}
 }
 
@@ -305,13 +320,23 @@ func (r *renews) autoRenew(cache *statusCache) {
 func (r *renews) statusFor(reports []certReport) []renewalInfo {
 	rc := r.renewalCfg()
 	out := make([]renewalInfo, 0, len(reports))
+	seen := map[string]bool{}
 	for _, rep := range reports {
+		host := rep.Host
+		due := false
+		if _, _, err := splitHostPortEntry(host); err == nil {
+			due = rep.Status != statusError && rep.DaysLeft <= float64(rc.Days)
+		} else {
+			host = "" // 非法条目: 不关联续签信息
+		}
 		inf := renewalInfo{
 			Host:     rep.Host,
+			Port:     rep.Port,
 			DaysLeft: rep.DaysLeft,
-			Due:      rep.Status != statusError && rep.DaysLeft <= float64(rc.Days),
+			Due:      due,
 		}
-		if prev, ok := r.info[rep.Host]; ok {
+		if prev, ok := r.info[host]; ok && host != "" && !seen[host] {
+			seen[host] = true
 			inf.CertReady = prev.CertReady
 			inf.CertNotAfter = prev.CertNotAfter
 			inf.LastTry = prev.LastTry
@@ -335,14 +360,20 @@ func (r *renews) handleRenew(dep *deployer, w http.ResponseWriter, req *http.Req
 	var body struct {
 		Host string `json:"host"`
 	}
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil || !r.hostRe.MatchString(body.Host) {
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "请提供合法 host")
 		return
 	}
+	// 允许 host:port 形式(面板传的是监控条目), 续签只对域名部分签发
+	host, _, err := splitHostPortEntry(body.Host)
+	if err != nil || !r.hostRe.MatchString(host) {
+		host = body.Host
+	}
+	host = strings.ToLower(host)
 	hosts := r.monitoredHosts()
 	monitored := false
 	for _, h := range hosts {
-		if h == body.Host {
+		if h == host {
 			monitored = true
 			break
 		}
@@ -353,11 +384,11 @@ func (r *renews) handleRenew(dep *deployer, w http.ResponseWriter, req *http.Req
 	}
 
 	// 注意: 签发期间不持有 r.mu(ACME 耗时分钟级, 且 saveCert 内部自行加锁)
-	notAfter, err := r.issue(body.Host)
+	notAfter, err := r.issue(host)
 	if err != nil {
 		r.mu.Lock()
-		r.info[body.Host] = &renewalInfo{
-			Host:      body.Host,
+		r.info[host] = &renewalInfo{
+			Host:      host,
 			LastTry:   time.Now().UTC().Format(time.RFC3339),
 			LastError: err.Error(),
 		}

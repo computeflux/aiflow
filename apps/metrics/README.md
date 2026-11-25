@@ -110,7 +110,8 @@ Web UI 的服务切换列表读取 workflow board 的 `urls.json`（默认 `http
 | `MONITOR_DB_DSN` | 配置库完整 DSN；留空则用内置默认 `workflow:workflow123@tcp(dev-workflow.computeflux.ai:3306)/workflow` |
 
 > 注意：数据库中的 `hosts` 同时是证书监控列表与续签白名单；`renewal.email` 非空才启用自动续签。
-> 主机优先级：`-hosts` 参数 > `SSL_HOSTS` 环境变量（临时覆盖）> 数据库配置 > 内置默认。
+> `host:port` 条目参与监控与续签白名单，但 Let's Encrypt 只对域名（DNS-01）签发，与端口无关。
+> 主机优先级：`-hosts` 参数 > `SSL_HOSTS` 环境变量（临时覆盖，同样支持 `host:port`）> 数据库配置 > 内置默认。
 
 ### Docker 部署
 
@@ -135,8 +136,8 @@ SSL_HTTP_PORT=19003 SSL_HOSTS="a.com,b.com" ./hacks/docker.sh start
 
 | 字段 | 说明 |
 | --- | --- |
-| `hosts` | 要监控的域名列表 |
-| `port` | TLS 端口（默认 443） |
+| `hosts` | 要监控的域名列表; 条目可带端口(`host:port`, 如 `xiaobai.asyou.me:8443`), 同一域名可监控多个端口; 不带端口用全局 `port` |
+| `port` | 全局默认 TLS 端口（默认 443，仅对不带端口的条目生效） |
 | `warn_days` | 到期不足 N 天告警（默认 30） |
 | `services` | 项目服务健康检查列表（`name` + `url`，`xxxx` 替换为 `$MONITOR_HOST`） |
 | `deployables` | 可部署应用列表（`name` + `script` + `actions` 白名单，面板部署控制） |

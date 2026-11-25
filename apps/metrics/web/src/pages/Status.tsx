@@ -18,7 +18,7 @@ import {
   type CertFile,
   type StatusData,
 } from "../api";
-import { Badge, StatCard, fmtDays, formatTime } from "../lib/status";
+import { Badge, StatCard, fmtDays, formatTime, targetName } from "../lib/status";
 
 // 证书状态详情页(总览页 / 有摘要表格, 此处展示完整信息)。
 
@@ -60,11 +60,12 @@ export function Status() {
   const hosts = data?.hosts ?? [];
   const apiErr = data?.error;
   const renewMap = useMemo(
-    () => new Map((data?.renewals ?? []).map((x) => [x.host, x])),
+    () => new Map((data?.renewals ?? []).map((x) => [targetName(x), x])),
     [data],
   );
 
   const doRenew = async (host: string) => {
+    // host 是监控条目(可含 :port); 续签只对域名部分签发(后端处理)
     setRenewing(host);
     setRenewMsg(null);
     try {
@@ -239,15 +240,16 @@ export function Status() {
             </thead>
             <tbody className="divide-y divide-(--border-divider)">
               {hosts.map((r) => {
-                const isOpen = expanded === r.host;
+                const name = targetName(r);
+                const isOpen = expanded === name;
                 return (
-                  <Fragment key={r.host}>
+                  <Fragment key={name}>
                     <tr
                       className="hover:bg-(--bg-elevated) cursor-pointer"
-                      onClick={() => setExpanded(isOpen ? null : r.host)}
+                      onClick={() => setExpanded(isOpen ? null : name)}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-bold font-mono">{r.host}</div>
+                        <div className="font-bold font-mono">{name}</div>
                         {(r.subject || r.error) && (
                           <div className="text-xs text-(--text-muted) font-mono truncate">
                             {r.error ? `error: ${r.error}` : r.subject}
@@ -279,7 +281,7 @@ export function Status() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         {(() => {
-                          const ri = renewMap.get(r.host);
+                          const ri = renewMap.get(name);
                           if (!ri) return <span className="text-xs text-(--text-muted)">-</span>;
                           const btnCls =
                             "border border-(--border-subtle) px-2 py-1 text-xs font-bold hover:bg-(--bg-elevated) transition disabled:opacity-40";
@@ -291,12 +293,12 @@ export function Status() {
                               {ri.cert_ready && (
                                 <span className="text-xs font-bold text-(--success)">新证书就绪</span>
                               )}
-                              {renewing === r.host ? (
+                              {renewing === name ? (
                                 <button disabled className={btnCls}>
                                   <Loader2 className="h-3 w-3 animate-spin inline" /> 签发中…
                                 </button>
                               ) : (
-                                <button onClick={() => doRenew(r.host)} className={btnCls}>
+                                <button onClick={() => doRenew(name)} className={btnCls}>
                                   <RefreshCw className="h-3 w-3 inline" /> 续签
                                 </button>
                               )}
@@ -351,7 +353,7 @@ export function Status() {
                                 <div className="font-mono text-(--text-muted)">-</div>
                               )}
                               {(() => {
-                                const ri = renewMap.get(r.host);
+                                const ri = renewMap.get(name);
                                 if (!ri || (!ri.last_try && !ri.cert_ready)) return null;
                                 return (
                                   <div className="pt-2">

@@ -16,6 +16,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -39,9 +40,10 @@ const (
 
 const defaultHosts = "test.computeflux.ai,test-api.computeflux.ai,computeflux.ai"
 
-// certReport holds the monitoring result of a single host.
+// certReport holds the monitoring result of a single host:port target.
 type certReport struct {
 	Host       string   `json:"host"`
+	Port       int      `json:"port,omitempty"` // 实际探测的 TLS 端口(每目标可独立指定)
 	Status     string   `json:"status"`
 	DaysLeft   float64  `json:"days_left"`
 	Subject    string   `json:"subject,omitempty"`
@@ -94,6 +96,8 @@ var hostsOverride []string
 
 // effectiveHosts 返回生效的监控主机列表,
 // 优先级: -hosts 参数 > SSL_HOSTS 环境变量 > 数据库配置 > 内置默认。
+// 条目允许 host:port 形式(如 xiaobai.asyou.me:8443), 表示对该端口的 TLS 服务单独监控;
+// 纯主机名回退到全局 port(默认 443)。
 func effectiveHosts(cfg *config) []string {
 	if len(hostsOverride) > 0 {
 		return hostsOverride
@@ -105,6 +109,28 @@ func effectiveHosts(cfg *config) []string {
 		return cfg.Hosts
 	}
 	return splitHosts(defaultHosts)
+}
+
+// splitHostPortEntry 解析监控条目: 无端口冒号时返回 port=0(表示使用全局默认端口);
+// "host:443" 这类显式端口会返回解析出的端口。非法端口视为条目无效。
+func splitHostPortEntry(h string) (host string, port int, err error) {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return "", 0, errors.New("主机条目不能为空")
+	}
+	host = h
+	if i := strings.LastIndex(h, ":"); i >= 0 && !strings.Contains(h[i+1:], ":") {
+		host = h[:i]
+		p, cerr := strconv.Atoi(h[i+1:])
+		if cerr != nil || p < 1 || p > 65535 {
+			return h, 0, fmt.Errorf("端口无效: %s", h)
+		}
+		port = p
+	}
+	if host == "" {
+		return h, 0, fmt.Errorf("缺少主机名: %s", h)
+	}
+	return host, port, nil
 }
 
 // resolveServiceURL 把服务地址中的 xxxx 主机占位符替换为 MONITOR_HOST
@@ -190,12 +216,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	port := 443
+	globalPort := 443
 	if cfg != nil && cfg.Port > 0 {
-		port = cfg.Port
+		globalPort = cfg.Port
 	}
 	if *portFlag > 0 {
-		port = *portFlag
+		globalPort = *portFlag
 	}
 
 	warnDays := 30
@@ -235,10 +261,10 @@ func main() {
 		return
 	}
 
-	// previous per-host status in loop mode, for change/recovery detection
+	// previous per-target status in loop mode, for change/recovery detection
 	prev := map[string]string{}
 	for {
-		reports := checkAll(hosts, port, warnDays)
+		reports := checkAll(hosts, globalPort, warnDays)
 		if *jsonOut {
 			printJSON(reports)
 		} else {
@@ -259,7 +285,7 @@ func main() {
 					}
 				}
 				for _, r := range reports {
-					prev[r.Host] = r.Status
+					prev[reportKey(r)] = r.Status
 				}
 			} else if maxSeverity(reports) >= 1 {
 				if err := m.sendAlert(reports); err != nil {
@@ -275,35 +301,53 @@ func main() {
 	}
 }
 
+// reportKey 是报告的去重键: 同一域名可监控多个端口, 键为 host 或 host:port。
+func reportKey(r certReport) string {
+	if r.Port == 0 {
+		return r.Host
+	}
+	return net.JoinHostPort(r.Host, fmt.Sprint(r.Port))
+}
+
 // diffStatus reports whether any host changed into a non-OK state since prev,
 // and which hosts recovered to OK.
 func diffStatus(prev map[string]string, reports []certReport) (bool, []string) {
 	alert := false
 	var recovered []string
 	for _, r := range reports {
-		old, known := prev[r.Host]
+		key := reportKey(r)
+		old, known := prev[key]
 		if !known || r.Status != old {
 			if r.Status != statusOK {
 				alert = true
 			}
 		}
 		if known && old != statusOK && r.Status == statusOK {
-			recovered = append(recovered, r.Host)
+			recovered = append(recovered, key)
 		}
 	}
 	return alert, recovered
 }
 
 // checkAll runs the per-host checks in parallel and returns reports in input order.
-func checkAll(hosts []string, port, warnDays int) []certReport {
+// 条目可带端口(host:port); 不带端口的条目使用 globalPort。
+func checkAll(hosts []string, globalPort, warnDays int) []certReport {
 	reports := make([]certReport, len(hosts))
 	var wg sync.WaitGroup
-	for i, host := range hosts {
+	for i, entry := range hosts {
+		host, port, err := splitHostPortEntry(entry)
+		if err != nil {
+			reports[i] = certReport{Host: entry, Status: statusError, Error: err.Error()}
+			continue
+		}
+		if port == 0 {
+			port = globalPort
+		}
 		wg.Add(1)
-		go func(i int, host string) {
+		go func(i int, host string, port int) {
 			defer wg.Done()
 			reports[i] = checkHost(host, port, warnDays)
-		}(i, host)
+		}(i, host, port)
 	}
 	wg.Wait()
 	return reports
@@ -312,7 +356,7 @@ func checkAll(hosts []string, port, warnDays int) []certReport {
 // checkHost fetches the leaf TLS certificate of host:port and evaluates its
 // validity window and chain.
 func checkHost(host string, port, warnDays int) certReport {
-	r := certReport{Host: host}
+	r := certReport{Host: host, Port: port}
 
 	addr := net.JoinHostPort(host, fmt.Sprint(port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
@@ -416,7 +460,7 @@ func printTable(reports []certReport) {
 		if r.Status != statusError {
 			days = fmt.Sprintf("%.1f", r.DaysLeft)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Host, r.Status, days, notAfter, r.Issuer)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", reportKey(r), r.Status, days, notAfter, r.Issuer)
 		if r.ChainError != "" {
 			fmt.Fprintf(w, "    chain error: %s\n", r.ChainError)
 		}
@@ -474,7 +518,7 @@ func (m *mailer) sendAlert(reports []certReport) error {
 	}
 	names := make([]string, 0, len(bad))
 	for _, r := range bad {
-		names = append(names, fmt.Sprintf("%s (%s)", r.Host, r.Status))
+		names = append(names, fmt.Sprintf("%s (%s)", reportKey(r), r.Status))
 	}
 	subject := "[sslmon] SSL certificate alert: " + strings.Join(names, ", ")
 
@@ -482,7 +526,7 @@ func (m *mailer) sendAlert(reports []certReport) error {
 	fmt.Fprintf(&b, "SSL certificate monitoring alert, %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
 	b.WriteString(tableOf(bad))
 	for _, r := range bad {
-		fmt.Fprintf(&b, "- %s: %s", r.Host, r.Status)
+		fmt.Fprintf(&b, "- %s: %s", reportKey(r), r.Status)
 		if r.DaysLeft < 0 {
 			fmt.Fprintf(&b, ", expired %.1f days ago", -r.DaysLeft)
 		} else {
@@ -526,7 +570,7 @@ func tableOf(reports []certReport) string {
 		if r.Status != statusError {
 			days = fmt.Sprintf("%.1f", r.DaysLeft)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Host, r.Status, days, notAfter, r.Issuer)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", reportKey(r), r.Status, days, notAfter, r.Issuer)
 	}
 	w.Flush()
 	return sb.String()
