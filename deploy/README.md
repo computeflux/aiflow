@@ -78,6 +78,10 @@ docker logs <svc>                               # 日志
   - `MYSQL_HOST=workflow-mysql` / `QDRANT_HOST=qdrant`
   - `SKILL_GATEWAY_URL=http://workflow-api:8001`（go-worker 的 InvokeSkill 经容器内网回 api）
   - `AUTH_URL=http://auth:8008`（auth 已容器化，容器 DNS）
+  - `PICOCLAW_APPROVAL_SECRET=<openssl rand -hex 32>`（**必配**）：board AI 助手写操作两阶段确认
+    （preview→confirm）的确认令牌 HMAC 密钥（`apps/ai-flow/pkg/workflow/approval.go`）。缺失时写工具
+    fail-closed 全部拒绝（报错「两阶段确认未配置（缺少 PICOCLAW_APPROVAL_SECRET）」）。仅 ai-flow 一个进程
+    内签/验，无需同步给其他服务；轮换只会让已签发未使用的 5 分钟令牌失效。
 - **compose 级变量**（SYNAPSE_* 等）在 `deploy/.env`。
 - **MySQL 字符集**：服务端 `--character-set-server=utf8mb4`（infra/mysql.yml command），客户端由 `config/mysql/utf8mb4.cnf`
   （挂到 `/etc/mysql/conf.d/`）默认 utf8mb4。

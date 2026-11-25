@@ -9,8 +9,10 @@ export function getApiBase(): string {
 export type CertStatus = "OK" | "WARN" | "EXPIRED" | "ERROR";
 
 // 单个主机 TLS 证书检查结果(JSON 字段与 sslmon -json 输出一致)。
+// port 为实际探测端口(条目带 :port 时非空); 续签只对域名(不含端口)签发。
 export interface CertReport {
   host: string;
+  port?: number;
   status: CertStatus;
   days_left: number;
   subject?: string;
@@ -34,9 +36,10 @@ export interface ServiceReport {
   error?: string;
 }
 
-// 单个主机的证书续签状态。
+// 单个监控目标的证书续签状态(host 为监控条目, 可含 :port; 续签只对域名部分签发)。
 export interface RenewalInfo {
   host: string;
+  port?: number;
   days_left: number;
   due: boolean; // 达到自动续签阈值
   cert_ready: boolean; // 已有新证书可下载

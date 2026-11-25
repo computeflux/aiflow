@@ -49,6 +49,7 @@ apps/dapp/
 apps/game/
 apps/minishop/
 apps/pi-web/
+apps/social/
 apps/tee-node/
 apps/tee-node-monitor/
 apps/web3auth/

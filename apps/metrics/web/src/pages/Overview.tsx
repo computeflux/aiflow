@@ -19,7 +19,7 @@ import {
   type DeployConfig,
   type StatusData,
 } from "../api";
-import { Badge, StatCard, fmtDays, formatTime } from "../lib/status";
+import { Badge, StatCard, fmtDays, formatTime, targetName } from "../lib/status";
 
 const actionLabels: Record<string, string> = {
   restart: "重启",
@@ -345,8 +345,8 @@ export function Overview() {
             </thead>
             <tbody className="divide-y divide-(--border-divider)">
               {hosts.map((r) => (
-                <tr key={r.host} className="hover:bg-(--bg-elevated)">
-                  <td className="px-4 py-3 font-bold font-mono text-xs">{r.host}</td>
+                <tr key={targetName(r)} className="hover:bg-(--bg-elevated)">
+                  <td className="px-4 py-3 font-bold font-mono text-xs">{targetName(r)}</td>
                   <td className="px-4 py-3">
                     <Badge status={r.status} />
                   </td>

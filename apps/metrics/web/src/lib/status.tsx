@@ -2,6 +2,11 @@
 import type { ReactNode } from "react";
 import type { CertReport, CertStatus } from "../api";
 
+// 监控目标显示名: 同一域名可监控多个端口(条目 host:port), 无端口时只显示域名。
+export function targetName(r: { host: string; port?: number }): string {
+  return r.port ? `${r.host}:${r.port}` : r.host;
+}
+
 export const statusMeta: Record<CertStatus, { label: string; tone: string }> = {
   OK: { label: "OK", tone: "text-(--success)" },
   WARN: { label: "WARN", tone: "text-(--warning)" },
