@@ -75,6 +75,8 @@ include:
   - compose/tools/agentctl.yml
   - compose/tools/inventory.yml
   - compose/tools/deployctl.yml
+  # M2-1 一次性迁移：pyreplay 账号池（x_accounts）→ social 账号池（social_accounts）
+  - compose/tools/account-migrate.yml
 
 # 单一网络：容器间用容器名 DNS 互通，不用 127.0.0.1，不用 /etc/hosts hack
 networks:

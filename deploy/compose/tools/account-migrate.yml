@@ -1,0 +1,26 @@
+# M2-1 一次性工具（profiles: [tools]，默认不启动）：pyreplay 账号池 → social 账号池。
+#
+# 把 pyreplay 的 x_accounts（auth_token/ct0 明文登录态 + enabled 布尔 + 每日点赞限额）
+# 导入 social 的 social_accounts（session_ref AES-256-GCM 密文 + 四态状态机 + 每日限额），
+# 并打印可核对的迁移报告（源表行数 = 新建 + 更新 + 跳过 + 失败，逐行状态与登录态指纹）。
+#
+# 用法（deploy/ 下；会话加密密钥与 MySQL 凭据都从根 .env 注入，密钥缺失工具直接拒绝跑）：
+#   docker compose --profile tools run --rm -T account-migrate check                 # 只读预演
+#   docker compose --profile tools run --rm -T account-migrate run                   # 执行迁移
+#   docker compose --profile tools run --rm -T account-migrate run --machine bot-a   # 逐台灰度
+#   docker compose --profile tools run --rm -T account-migrate run --json            # JSON 报告
+#
+# 迁移可重复执行（幂等）：第二轮起全部记 updated，账号行数不变。
+# ⚠️ SOCIAL_SESSION_KEY 必须与 social 服务用的是**同一个**密钥：迁移写入的密文要能被
+#    social 解回，换密钥写入 = 迁过去的登录态永远解不开（账号全线变 need_login）。
+services:
+  account-migrate:
+    build:
+      context: ../../../apps/social
+      dockerfile: Dockerfile.migrate
+    image: computeflux/account-migrate:latest
+    container_name: account-migrate
+    profiles: ["tools"]
+    env_file: ../../../.env
+    networks: [workflow-net]
+    labels: ["part-of=compute-flux-workflow"]
