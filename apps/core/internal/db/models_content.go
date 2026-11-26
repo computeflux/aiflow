@@ -156,6 +156,13 @@ type SocialTweet struct {
 // XAccount 是 pyreplay worker 的点赞账号池（对应表 x_accounts）。
 // 注意：auth_token / ct0 为敏感字段，接口返回前必须脱敏。
 // machine_id 用于多机器人部署：每台机器人只使用属于自己的账号。
+//
+// LastLoginAt / LastLoginError（M1-3，工作项 wi-1795586435-e694）：X 登录链
+// （apps/pyreplay/adapters/x_login.py 的 AccountManagerReporter）回报登录结果的落点——
+// 每次登录（成功或失败）刷新 LastLoginAt，失败原因写 LastLoginError。AutoMigrate 建列，
+// board 的账号页可展示「最后登录时间 / 最近登录失败原因」。**改这两列名要同步改 pyreplay
+// 侧的 SQL**（列名对不上会在真库上抛 1054 Unknown column，并被 Python 侧吞成 warning，
+// 表现为「登录回报永远不落库」）。
 type XAccount struct {
 	ID              uint       `gorm:"primaryKey" json:"id"`
 	MachineID       string     `gorm:"size:64;index;default:''" json:"machine_id"`
@@ -167,6 +174,8 @@ type XAccount struct {
 	CooldownMinutes int        `gorm:"default:10" json:"cooldown_minutes"`
 	UsedToday       int        `gorm:"default:0" json:"used_today"`
 	LastUsedAt      *time.Time `json:"last_used_at"`
+	LastLoginAt     *time.Time `json:"last_login_at"`
+	LastLoginError  string     `gorm:"type:text" json:"last_login_error"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

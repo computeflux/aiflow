@@ -12,5 +12,10 @@
   "profile_scan_limit": 50,
   "like_tweet_max_age_days": 7,
   "default_daily_like_limit": 50,
-  "default_cooldown_minutes": 10
+  "default_cooldown_minutes": 10,
+  "login_2fa_code_max_len": 16,
+  "login_intervention_probe_ms": 1500,
+  "login_persist_session": true,
+  "login_notify_account_manager": true,
+  "login_timeout_sec": 300
 }

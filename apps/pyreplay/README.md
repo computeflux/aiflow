@@ -67,6 +67,8 @@ docker logs -f pyreplay
 pyreplay/
 ├── adapters/              # 平台适配器
 │   ├── models.py          # 数据模型 (Pydantic)
+│   ├── x_adapter.py       # XAdapter 门面（登录 / 登录态读写）
+│   ├── x_login.py         # X/Twitter 登录链 + 按账号登录态存储 + 账号池回报
 │   └── x_like.py          # X/Twitter 点赞
 ├── config/                # 平台配置 JSON
 │   └── x.json
@@ -119,3 +121,74 @@ CREATE TABLE like_records (
 | `profile_scroll_steps` | 扫描用户主页时的滚动次数 | 5 |
 | `min_delay_between_likes` / `max_delay_between_likes` | 两次点赞之间的随机间隔（秒） | 30 / 180 |
 | `default_daily_like_limit` / `default_cooldown_minutes` | 新账号默认每日限额 / 冷却分钟数 | 50 / 10 |
+
+## X 登录（`XAdapter.login`）
+
+登录链在 `adapters/x_login.py`（流程 + 登录态存储 + 账号池回报），门面在 `adapters/x_adapter.py`；
+skill HTTP 服务暴露为 `POST /login`（与 `POST /invoke` 点赞分锁串行）。
+
+```bash
+curl -s -X POST http://127.0.0.1:9500/login -H 'Content-Type: application/json' \
+  -d '{"account":"alice@example.com","password":"***","headless":true}'
+```
+
+返回**脱敏**摘要（`auth_token` / `ct0` 只出掩码）：
+
+```json
+{"ok": false, "account": "alice@example.com", "username": "alice",
+ "needs_manual": true, "intervention": "two_factor", "qrcode_path": "",
+ "message": "account 'alice' requires a 2FA code (no handler installed)",
+ "session_file": ".../sessions/alice_example_com.json", "profile_dir": ".../profiles/alice_example_com",
+ "source": "", "account_manager": "updated", "auth_token": "a1b2****a1b2", "ct0": "0011****0123"}
+```
+
+要点：
+
+1. **按账号隔离**：浏览器持久化 profile 与会话文件都按账号目录/文件名隔离
+   （`X_PROFILE_DIR` / `X_SESSION_DIR`，会话文件 0600），多账号互不串登录态。
+2. **人工介入占位接口**：2FA 与扫码是两条互斥路径，`two_factor_code` 直传优先；
+   未装 handler 时不阻塞、不猜，直接回报 `needs_manual=true` + `intervention` +
+   （扫码时）二维码落盘路径。接 Matrix / board 审批时传 `make_intervention(two_factor=..., qrcode=...)`，
+   或继承 `ManualInterventionHandler`。⚠️ 扫码顺序固定为**先落盘二维码、再调 handler**
+   （handler 常阻塞等人扫码，码必须先存在）；码取不到就返回空路径并判本次登录失败。
+3. **介入必须闭环**：只有拿到有效登录态（`auth_token` + `ct0`）才算成功；
+   handler 只声明「要人工」而没给码 → 登录失败（`needs_manual`），不会因页面出现登录元素就当成功。
+   ⚠️ `needs_manual` 只表示「介入**没闭环**」，与 `intervention`（页面**要求过**哪种介入）是两回事：
+   2FA 码提交成功后 `intervention="two_factor"` 而 `needs_manual=false`、`ok=true` ——
+   两者混用会让 board 把成功登录当成「仍需人工」，反复带码重登直到撞风控。
+4. **回报账号池**（`x_accounts`）：成功写回 `auth_token`/`ct0` 并置 `enabled=1`、清 `last_login_error`；
+   失败只写 `last_login_at` + `last_login_error`，**绝不覆盖**账号原有登录态，也**绝不为
+   「从没登录成功的账号」建 `enabled=1` 的空壳行**（`load_eligible` 不校验 token 是否为空，
+   空壳行会被挑去点赞并必然失败）。未配 `MYSQL_HOST` 时回报为 `skipped: ...`，登录链照常落盘。
+
+`config/x.json` 登录相关配置：
+
+| 字段 | 说明 | 默认 |
+|---|---|---|
+| `login_2fa_code_max_len` | 2FA 码长度上限（形状防御，不做业务校验） | 16 |
+| `login_intervention_probe_ms` | 探测「要 2FA 还是要扫码」的有界超时 | 1500 |
+| `login_persist_session` | 登录成功后写会话文件 | true |
+| `login_notify_account_manager` | 登录结果回报 `x_accounts` | true |
+| `login_timeout_sec` | 登录整链超时（起浏览器 + 页面动作 + 介入） | 300 |
+
+DDL：老库补登录回报列跑 `bash apps/core/hacks/bootstrap.sh`（含
+`apps/core/hacks/sql/x_accounts_login_columns.sql`，幂等）；新库由 Go 侧 AutoMigrate 直接建出。
+
+单测：`cd apps/pyreplay && uv run pytest tests/test_x_login.py -q`（无 pytest 时可直跑
+`python3 tests/test_x_login.py`，同一套断言）。
+
+登录整链超时：`login_timeout_sec`（默认 300 秒）覆盖「起浏览器 + 全部页面动作 + 人工介入」。
+超时的实现是**取消**登录协程，而被取消的协程里 `await` 推进不了任何收尾（连 `asyncio.shield`
+也不行：shield 只让内层任务在外层取消时存活，不会让外层多等一秒），所以收尾走
+`_run_cleanup` / `_drain_cleanups` 这条「登记 → 驱动层补跑」通道。⚠️ 两个必须守住的细节：
+
+- 登录协程必须用 `asyncio.ensure_future` **显式建 Task** 并把它交给 `_drain_cleanups`；
+  `asyncio.wait_for(coro, ...)` 会自己新建 Task，登记方（登录协程里的 `current_task()`）与
+  drain 方（外层 `current_task()`）就会是两个对象，通道静默空转，收尾任务在 `asyncio.run()`
+  退出时被 `_cancel_all_tasks` 直接 cancel。
+- 「有 page」与「无 page」两条收尾不能走错：句柄必须在 `_teardown` 清空它**之前**取出，
+  否则会退化成「起一次性 driver 打开同一 user-data-dir 再关掉」，而那个目录正被没关的
+  context 占着。漏掉收尾的代价是每次超时漏一个 persistent context + node driver 进程，并让
+  账号的 user-data-dir 留着 `SingletonLock`，下次登录同一账号直接起不来。
+
+改这块务必同步跑 `tests/test_x_login.py` 里的三个超时/释放用例（含不打桩真收尾那条）。

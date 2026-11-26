@@ -35,7 +35,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from adapters.models import LikeResult, LikeTarget  # noqa: E402
+from adapters.x_adapter import XAdapter  # noqa: E402
 from adapters.x_like import XLikeAdapter  # noqa: E402
+from adapters.x_login import LoginResult  # noqa: E402
 from services.account_manager import AccountManager  # noqa: E402
 from services.mysql import get_mysql  # noqa: E402
 
@@ -51,14 +53,42 @@ _STATUS_RE = re.compile(r"/status/(\d+)")
 # 与 main.py 共用账号池逻辑；XLikeAdapter 每进程一个实例（内部浏览器会话）
 _account_manager = AccountManager()
 _x_like = XLikeAdapter()
+# X 登录链（M1-3）：登录结果回报同一个 AccountManager（写 x_accounts）
+_x_adapter = XAdapter(account_manager=_account_manager)
 
-# XLikeAdapter 底层是单浏览器会话，进程内串行执行点赞
+# XLikeAdapter 底层是单浏览器会话，进程内串行执行点赞；登录同样串行（共用浏览器资源）
 _LIKE_LOCK = threading.Lock()
+_LOGIN_LOCK = threading.Lock()
 
 
 def _extract_tweet_id(post_url: str) -> str:
     m = _STATUS_RE.search(post_url or "")
     return m.group(1) if m else ""
+
+
+def _do_login(
+    account: str,
+    password: str = "",
+    headless: bool | None = None,
+    force: bool = False,
+    two_factor_code: str = "",
+) -> dict[str, Any]:
+    """登录一个 X 账号并把登录态按账号隔离持久化（详见 adapters.x_login.XLoginFlow）。
+
+    2FA / 扫码的**人工介入占位接口**：本进程没有接介入渠道（Matrix / board 审批），
+    所以未装 handler 时登录链直接回报 needs_manual + intervention + 二维码落盘路径，
+    调用方（board / 运维）拿到后走线下介入再带 two_factor_code 重试。
+    """
+    result: LoginResult = asyncio.run(
+        _x_adapter.login(
+            account,
+            password,
+            headless=headless,
+            force=force,
+            two_factor_code=two_factor_code,
+        )
+    )
+    return result.summary()
 
 
 def _save_record(result: LikeResult, account: Any) -> None:
@@ -179,15 +209,63 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"ok": False, "reason": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path.split("?")[0] != "/invoke":
+        path = self.path.split("?")[0]
+        if path == "/login":
+            self._handle_login()
+        elif path == "/invoke":
+            self._handle_invoke()
+        else:
             self._send_json(404, {"ok": False, "reason": "not found"})
-            return
+
+    def _handle_login(self) -> None:
+        """POST /login —— X 账号登录（M1-3）。
+
+        body: {"account": "...", "password": "***", "headless": true,
+               "force": false, "two_factor_code": ""}
+             -> 200 登录结果摘要（**脱敏**：auth_token/ct0 只出掩码）：
+                {"ok", "account", "username", "needs_manual", "intervention",
+                 "qrcode_path", "message", "session_file", "profile_dir", "source",
+                 "account_manager", "auth_token": "<masked>", "ct0": "<masked>"}
+
+        业务失败（含 needs_manual=true 的 2FA/扫码介入）也返回 200 + ok=false，
+        进程级错误（非法请求体等）才 500。
+        """
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            body = json.loads(raw or b"{}")
-            if not isinstance(body, dict):
-                raise ValueError("body must be a JSON object")
+            body = self._read_json_body()
+            account = str(body.get("account") or "").strip()
+            if not account:
+                raise ValueError("account is required")
+
+            headless_raw = body.get("headless")
+            headless = None if headless_raw is None else bool(headless_raw)
+
+            # 登录会起浏览器会话，与点赞分锁串行，避免与 worker 的会话互相干扰
+            with _LOGIN_LOCK:
+                result = _do_login(
+                    account,
+                    str(body.get("password") or ""),
+                    headless=headless,
+                    force=bool(body.get("force")),
+                    two_factor_code=str(body.get("two_factor_code") or ""),
+                )
+            self._send_json(200, {"ok": bool(result.get("success")), **result})
+        except Exception as exc:
+            detail = f"{exc}\n{traceback.format_exc()}"
+            logger.error("x login skill crashed: %s", detail)
+            _save_error(detail)
+            self._send_json(500, {"ok": False, "reason": str(exc)[:500]})
+
+    def _read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length > 0 else b"{}"
+        body = json.loads(raw or b"{}")
+        if not isinstance(body, dict):
+            raise ValueError("body must be a JSON object")
+        return body
+
+    def _handle_invoke(self) -> None:
+        try:
+            body = self._read_json_body()
 
             post_url = str(body.get("post_url") or "")
             like_count = int(body.get("like_count") or 1)
@@ -221,7 +299,7 @@ def main() -> None:
     )
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), _Handler)
     logger.info(
-        "like skill server listening on %s:%d (machine_id=%s)",
+        "like skill server listening on %s:%d (machine_id=%s) [routes: /invoke /login /health]",
         LISTEN_HOST, LISTEN_PORT, _MACHINE_ID or "default",
     )
     try:
