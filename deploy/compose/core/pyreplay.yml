@@ -15,6 +15,12 @@ services:
       MYSQL_HOST: workflow-mysql
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: pyreplay
+      # M1-4 登录任务消费（login_worker.py）：与 social 侧 store.OpenQueue 同口径
+      # （REDIS_ADDR 默认 redis:6379，全系统 workflow-net 内部服务发现）。
+      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
+      # 登录结果回报 social 账号池（board 账号管理页的数据源）；留空 = 回报整体跳过，
+      # 登录链行为与 M1-3 一致。
+      SOCIAL_LOGIN_REPORT_URL: ${SOCIAL_LOGIN_REPORT_URL:-http://social:8010}
     ports:
       - "127.0.0.1:9500:9500"
     networks: [workflow-net]

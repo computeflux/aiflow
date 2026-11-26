@@ -17,6 +17,12 @@ Python MCP 执行 worker，系统标识 `system=pyreplay`，以 Docker 容器运
 - `config/` — 配置
 - `telemetry.py` — 遥测
 - `skill_server.py` / `skill.json` — Skill 服务入口
+- `login_worker.py` — social 登录任务消费者（M1-4：board 账号页「触发登录」的执行端，
+  消费 Redis `social:jobs:queue` 里 `job_type=login` 的任务 → X 登录链执行 →
+  `services/social_report.py` PATCH 回报 social 账号状态机 + 直接推进 `social_jobs`；
+  非 login 任务原样挪回队列尾，绝不执行）
+- `services/social_report.py` — 登录结果回报 social（`SOCIAL_LOGIN_REPORT_URL` 未配置 =
+  整体跳过，登录链行为与 M1-3 一致；网络/HTTP 错误吞成状态串，绝不打崩登录链）
 - `tests/` — 测试
 
 ## 运行
@@ -38,7 +44,7 @@ docker logs -f pyreplay           # 看容器日志
 
 | 脚本 | 用途 | 用法 |
 |------|------|------|
-| `entrypoint.sh` | 后台起 `skill_server.py`（默认 :9500，`SKILL_LIKE_PORT` 可覆盖）并守护重启（崩溃后等 5s 再起）；前台运行 `main.py`（Temporal worker）。`main.py` 退出即容器退出，由容器 `restart` 策略拉起 | 无需手工调用（镜像 `CMD` 在容器启动时自动执行） |
+| `entrypoint.sh` | 后台起 `skill_server.py`（默认 :9500，`SKILL_LIKE_PORT` 可覆盖）与 `login_worker.py`（M1-4 登录任务消费）并各自守护重启（崩溃后等 5s 再起）；前台运行 `main.py`（Temporal worker）。`main.py` 退出即容器退出，由容器 `restart` 策略拉起 | 无需手工调用（镜像 `CMD` 在容器启动时自动执行） |
 
 要点：
 - 需要 `python3` 与镜像内依赖（`Dockerfile` 已装 `temporalio` / `crawl4ai` / Playwright Chromium 等）；工作目录必须是 `/app`（`main.py`、`skill_server.py`、`adapters/` 同级）。

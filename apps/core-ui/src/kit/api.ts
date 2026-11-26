@@ -171,6 +171,76 @@ export interface EmailSender {
 export interface XAccount { id: number; machine_id: string; username: string; auth_token: string; ct0: string; enabled: boolean; daily_like_limit: number; cooldown_minutes: number; used_today: number; last_used_at?: string; created_at: string; updated_at: string }
 export interface FollowTarget { id: number; machine_id: string; handle: string; enabled: boolean; scan_interval_minutes: number; max_like_per_scan: number; last_checked_at?: string; created_at: string; updated_at: string }
 
+
+// ---- M1-4 账号管理页（social :8010 渠道账号池，经 core-ui nginx /social/ 同源代理）----
+// social 不是 workflow-api：账号 CRUD / 状态机 / 挑号 / 触发登录都在 social 自己的
+// REST 上（见 apps/social/internal/infra/infra.go）。登录态明文（session_ref）默认绝不
+// 从 API 出（social 侧 include_session 需服务端显式开 SOCIAL_ALLOW_SESSION_EXPORT=1，
+// 前端永不开启）；新增账号提交的 session_ref 由 social 用 SOCIAL_SESSION_KEY 加密入库。
+export interface SocialAccountView {
+  id: number;
+  channel: string;
+  account_id: string;
+  machine_id: string;
+  owner: string;
+  login_name: string;
+  cookies_path: string;
+  status: string; // active | need_login | banned | cooldown
+  cooldown_until?: string;
+  last_used_at?: string;
+  used_today: number;
+  daily_limit: number;
+  last_error: string;
+  last_login_at?: string;
+  last_login_error: string;
+}
+
+export function getSocialApiBase(): string {
+  // 同源代理（nginx /social/ → social:8010，见 deploy/nginx/core-ui.conf），无跨域。
+  return `${window.location.origin}/social`;
+}
+
+async function socialRequest(path: string, init?: RequestInit, errorMsg?: string): Promise<any> {
+  const res = await request(`${getSocialApiBase()}${path}`, init, errorMsg ?? `social ${path} failed`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any)?.error || `social ${path} failed: ${res.status}`);
+  return data;
+}
+
+export async function fetchSocialAccounts(filter: { channel?: string; machineId?: string; status?: string } = {}): Promise<SocialAccountView[]> {
+  const qs = new URLSearchParams();
+  if (filter.channel) qs.set("channel", filter.channel);
+  if (filter.machineId) qs.set("machine_id", filter.machineId);
+  if (filter.status) qs.set("status", filter.status);
+  const q = qs.toString();
+  const data = await socialRequest(`/api/social/accounts${q ? `?${q}` : ""}`, undefined, "fetch social accounts failed");
+  return (data?.accounts ?? []) as SocialAccountView[];
+}
+
+export async function createSocialAccount(data: { channel: string; account_id: string; machine_id?: string; owner?: string; login_name?: string; session_ref?: string; cookies_path?: string; status?: string; daily_limit?: number }): Promise<SocialAccountView> {
+  const res = await socialRequest("/api/social/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }, "create social account failed");
+  return res.account as SocialAccountView;
+}
+
+export async function deleteSocialAccount(channel: string, accountId: string): Promise<void> {
+  await socialRequest(`/api/social/accounts/${encodeURIComponent(channel)}/${encodeURIComponent(accountId)}`, { method: "DELETE" }, "delete social account failed");
+}
+
+export async function setSocialAccountStatus(channel: string, accountId: string, status: string, cooldownMinutes = 0, lastError = ""): Promise<SocialAccountView> {
+  const res = await socialRequest(`/api/social/accounts/${encodeURIComponent(channel)}/${encodeURIComponent(accountId)}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, cooldown_minutes: cooldownMinutes, last_error: lastError }) }, "set social account status failed");
+  return res.account as SocialAccountView;
+}
+
+// 触发登录：202 建 login 任务（Redis 就绪时入队，由 worker 执行登录并回报账号池）。
+export async function triggerSocialAccountLogin(channel: string, accountId: string): Promise<{ job_no: string; queue: boolean }> {
+  const res = await socialRequest(`/api/social/accounts/${encodeURIComponent(channel)}/${encodeURIComponent(accountId)}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }, "trigger social account login failed");
+  return { job_no: res.job_no as string, queue: !!res.queue };
+}
+
+export async function fetchSocialRegistryChannels(): Promise<string[]> {
+  const data = await socialRequest("/api/social/registry", undefined, "fetch social registry failed");
+  return ((data?.registry ?? []) as Array<{ name: string }>).map((r) => r.name);
+}
 export async function fetchJobs(status?: string): Promise<PublishJob[]> { const url = new URL(`${getApiBase()}/jobs`); if (status) url.searchParams.set("status", status); const res = await request(url.toString(), undefined, "fetch jobs failed"); const data = await res.json(); return data ?? []; }
 export async function fetchRawItems(source?: string, page = 1, pageSize = 20): Promise<{ items: RawItem[]; total: number }> { const url = new URL(`${getApiBase()}/raw-items`); if (source) url.searchParams.set("source", source); url.searchParams.set("page", String(page)); url.searchParams.set("page_size", String(pageSize)); const res = await request(url.toString(), undefined, "fetch raw items failed"); const data = await res.json(); return { items: data?.items ?? [], total: data?.total ?? 0 }; }
 export async function fetchVectorPoints(): Promise<VectorPoint[]> { const res = await request(`${getApiBase()}/vector-points`, undefined, "fetch vector points failed"); const data = await res.json(); return data ?? []; }

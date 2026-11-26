@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
         "opentelemetry-exporter-otlp-proto-grpc>=1.24,<2.0" \
         "pydantic>=2.0,<3.0" \
         "pymysql>=1.1,<2.0" \
+        "redis>=5.0,<6.0" \
         "python-dotenv>=1.0,<2.0" \
         "temporalio>=1.0,<2.0" \
     && python -m playwright install --with-deps chromium \

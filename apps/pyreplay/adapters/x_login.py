@@ -1100,7 +1100,37 @@ class AccountManagerReporter:
         )
 
     def report(self, result: LoginResult) -> str:
-        """回报一次登录结果，返回可读状态（created / updated / skipped / failed）。"""
+        """回报一次登录结果，返回可读状态（created / updated / skipped / failed）。
+
+        M1-4 起是**双回报**：先回报自己的 ``x_accounts``（原 M1-3 链路，状态串原样
+        作为前缀），再回报 social 的 ``social_accounts``（board 账号管理页
+        ``/content/accounts`` 的数据源；board「触发登录」建 login 任务，登录结果由
+        这一路 PATCH 回 social 的登录回报端点，驱动它的状态机）。
+        ``SOCIAL_LOGIN_REPORT_URL`` 未配置 → social 一路返回 ``skipped``，整体状态串
+        与 M1-3 完全一致（行为不变）；配置了才追加 ``; social:<状态>`` 后缀。
+        """
+        status = self._report_x_accounts(result)
+
+        # 回报桥自身对「未配置 SOCIAL_LOGIN_REPORT_URL」返回 skipped 且零请求，所以
+        # **无条件调用**：x_accounts 一路的降级（skipped: MYSQL_HOST not configured）
+        # 绝不能顺带跳过 social 一路 —— 账号池是两套（x_accounts 在 core 域、
+        # social_accounts 在 social 域），互不依赖，各走各的配置。
+        # 经模块属性调用：单测 monkeypatch services.social_report.report_social_login 生效。
+        from services import social_report as _social_report
+
+        social = _social_report.report_social_login(
+            "x", result.account, result.success, self._message(result)
+        )
+        if social.startswith("skipped"):
+            return status
+        return f"{status}; social:{social}"
+
+    @staticmethod
+    def _message(result: LoginResult) -> str:
+        return result.message or result.intervention or "login failed"
+
+    def _report_x_accounts(self, result: LoginResult) -> str:
+        """回报一次登录结果到 x_accounts（created / updated / skipped / failed）。"""
         if not self._mysql_configured():
             return "skipped: MYSQL_HOST not configured"
 
