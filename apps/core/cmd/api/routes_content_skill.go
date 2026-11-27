@@ -47,21 +47,22 @@ func registerContentSkillRoutes(
 		ctx.JSON(http.StatusOK, result)
 	})
 
+	// 点赞能力（M3-2）：唯一的 like 入口，执行链只有一条 ——
+	// LikeSkillWorkflow → InvokeSkill → skillgateway → pyreplay skill 'like'。
+	// 旧的 pyreplay worker 直连分支与 LIKE_VIA_SKILL 开关一并删除：点赞的节奏、账号池、
+	// 限流与熔断全部由 skill 框架负责，API 层不再关心执行端跑在哪个进程。
 	r.POST("/like", func(ctx *gin.Context) {
-		var input workflows.LikeWorkflowInput
+		var input workflows.LikeSkillInput
 		if err := ctx.ShouldBindJSON(&input); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if input.PyreplayTaskQueue == "" {
-			input.PyreplayTaskQueue = cfg.TemporalPyreplayTaskQueue
-		}
-		wr, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{TaskQueue: cfg.TemporalGoTaskQueue, ID: fmt.Sprintf("like-%s", uuid.NewString())}, workflows.LikeWorkflow, input)
+		wr, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{TaskQueue: cfg.TemporalGoTaskQueue, ID: fmt.Sprintf("like-%s", uuid.NewString())}, workflows.LikeSkillWorkflow, input)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		var result workflows.LikeWorkflowResult
+		var result workflows.LikeSkillResult
 		if err := wr.Get(ctx, &result); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

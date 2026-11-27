@@ -72,6 +72,13 @@ pyreplay/
 │   └── x_like.py          # X/Twitter 点赞
 ├── config/                # 平台配置 JSON
 │   └── x.json
+├── services/              # 业务服务
+│   ├── account_manager.py # x_accounts 账号池（冷却 / 每日限额 / 最久未用随机）
+│   ├── like_skill.py      # ★ skill 'like' 内核：schema + 账号轮换 + 落库（三条入口共用）
+│   ├── mysql.py           # MySQL 连接（惰性 + 断线重连）
+│   └── social_report.py   # M1-4 登录结果回报 social 账号池
+├── skill.json             # skill 'like' 的契约（input/output schema + limits）
+├── skill_server.py        # skill 'like' 的 HTTP 服务（:9500，skillgateway 调用）
 ├── main.py                # Temporal Worker 入口
 └── pyproject.toml         # 项目元数据 & 依赖
 ```
@@ -81,10 +88,10 @@ pyreplay/
 | Activity | 说明 |
 |---|---|
 | `LikeActivities.like` | 点赞单条推文（随机挑选账号） |
-| `LikeActivities.like_batch` | 批量点赞：随机打乱顺序、随机切换账号、随机间隔。返回 `{total, success, failed, results}`，`results` 为逐条 `{tweet_id, tweet_url, success, error}`，供调用方（Go workflow）判断哪些推文真正点赞成功 |
+| `LikeActivities.like_batch` | 批量点赞：随机打乱顺序、逐条走 like 技能内核（账号在整批内去重轮换）、随机间隔。返回 `{total, success, failed, results}`，`results` 为逐条 `{tweet_id, tweet_url, success, error}`，供调用方（Go workflow）判断哪些推文真正点赞成功 |
 | `FollowActivities.scan_and_like` | 订阅：扫描 `follow_targets` 中到期目标的用户主页，提取新推文（与 `like_records` 去重），用随机账号点赞。参数 `target_id` 可选，指定则只扫该目标 |
 
-待点赞的推文列表由上层 Go workflow（`LikeWorkflow`，见 `internal/workflows/like.go`）从 `raw_items` 表中查询后传入，本 worker 不直接查询业务库，只负责执行点赞动作并写自己的 `like_records` 日志表。订阅功能（`scan_and_like`）由 worker 自己读 `follow_targets` 表，去重依赖 `like_records`。
+待点赞的推文列表由上层 Go workflow（`LikeSkillWorkflow`，见 `apps/core/internal/workflows/like_skill.go`）从 `raw_items` 表中查询后传入，本 worker 不直接查询业务库，只负责执行点赞动作并写自己的 `like_records` 日志表。订阅功能（`scan_and_like`）由 worker 自己读 `follow_targets` 表，去重依赖 `like_records`。
 
 ## 多账号 & 随机化（反封号）
 
@@ -121,6 +128,48 @@ CREATE TABLE like_records (
 | `profile_scroll_steps` | 扫描用户主页时的滚动次数 | 5 |
 | `min_delay_between_likes` / `max_delay_between_likes` | 两次点赞之间的随机间隔（秒） | 30 / 180 |
 | `default_daily_like_limit` / `default_cooldown_minutes` | 新账号默认每日限额 / 冷却分钟数 | 50 / 10 |
+
+## like 技能内核（`services/like_skill.py`，M3-2）
+
+`like` 是 pyreplay 暴露的第一个 skill（契约见 `skill.json`）。M3-2 把点赞能力的实现收口成
+**一个**内核 `services.like_skill.LikeSkill`，三条入口全部复用它，行为逐字段等于 skill schema：
+
+| 入口 | 调用方 | 说明 |
+| --- | --- | --- |
+| `skill_server.py` `POST /invoke` | skillgateway（board / agent / `skillctl invoke like`） | HTTP，输入输出即 schema |
+| `main.py` `LikeActivities.like` / `like_batch` | Temporal（pyreplay 任务队列上的既有/手工投递调用） | activity 契约不变，内部改走内核 |
+| `main.py` `_execute_like_job`（like_jobs 执行器） | 本机后台轮询 | 会话式批量；账号在会话内锁定、记账按会话计一次 |
+
+内核契约（与 `skill.json` 一字不差；`results[]` 逐条给 `tweet_id` / `success` / `error`）：
+
+```text
+input  = {"post_url": "https://x.com/.../status/<id>", "like_count": 1..20}   # 缺省 1，越界钳到 [1,20]
+output = {"ok": bool, "reason": str, "tweet_id": str, "attempts": int,
+          "success_count": int, "results": [{"tweet_id", "success", "error"}]}
+```
+
+* `ok` = `success_count > 0`：网关按顶层 `ok` 记熔断计数；业务失败也回 HTTP 200 + `ok=false`
+  （HTTP 状态只表达进程级错误），**不能**把「一条都没点动」写成 5xx —— 那会被 Temporal
+  当成传输失败重试，一条坏推文能把整批拖成 N×重试次数的浏览器会话；
+* 账号级去重：同一次调用内每个账号只用一次，跨调用由调用方传 `excluded_account_ids`；
+  账号记账（冷却 / 每日限额）走注入的账号池接缝，策略在实现侧 —— worker 与 skill HTTP 进程
+  逐条记，like_jobs 会话执行器整场会话只记一次；
+* 逐条写 `like_records`，全失败写 `error_logs`；落库/记账异常一律吞成日志，绝不冒泡杀进程；
+* 输出附带 `account_ids`（本次用过的账号；schema 允许附加属性），供调用方扩宽去重范围。
+
+单测（不联网、不起浏览器、不连库：账号池 / 点赞执行器 / 落库全部鸭子注入）：
+
+```bash
+cd apps/pyreplay
+uv run pytest tests/test_like_skill.py -q      # 有 pytest 时（dev 依赖组）
+python3 tests/test_like_skill.py               # 无第三方依赖时的直跑契约（CI 兜底口径）
+```
+
+Go 侧的配套测试：`apps/core/internal/skillcontract`（读 `apps/pyreplay/skill.json`，逐字段比对
+Go 契约常量与 schema 的字段名 / minimum / maximum，任一侧改名即红）和
+`apps/core/internal/workflows/like_skill_test.go`（Temporal test environment 跑通「取数 →
+InvokeSkill → 回写」整条编排：钉住走的是 Skill 网关、送给技能的输入符合 schema、只有
+技能回报成功的推文才回写 `raw_items.liked`）。
 
 ## X 登录（`XAdapter.login`）
 

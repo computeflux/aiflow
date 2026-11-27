@@ -94,8 +94,9 @@ func main() {
 	w.RegisterWorkflow(workflows.AutoTweetWorkflow)
 	w.RegisterWorkflow(workflows.ScheduledAutoTweetWorkflow)
 	w.RegisterWorkflow(workflows.FollowLikeDispatchWorkflow)
-	// P1：/like 旧链路（LIKE_VIA_SKILL 未启用时）依赖的 LikeWorkflow
-	w.RegisterWorkflow(workflows.LikeWorkflow)
+	// M3-2：like 能力的唯一执行链（LikeSkillWorkflow → InvokeSkill → skillgateway）；
+	// 旧的 LikeWorkflow（pyreplay worker 直连 + LIKE_VIA_SKILL 开关）已删除。
+	w.RegisterWorkflow(workflows.LikeSkillWorkflow)
 	// P1：通用 skill 调用 workflow（任意已注册 skill 均可经 Temporal 调用）
 	w.RegisterWorkflow(workflows.GenericSkillWorkflow)
 	w.RegisterActivity(activities.New(qc, llmClient, database))
@@ -144,6 +145,9 @@ func main() {
 		}),
 	}
 	agentWorkers[0].RegisterWorkflow(workflows.GenericSkillWorkflow)
+	// M3-2：like 能力（skill 网关链）也注册到 agent-prod 的 skill 队列，
+	// 便于与 skill 侧 worker 同 namespace 调度（默认队列继续承接 API 触发的批次）。
+	agentWorkers[0].RegisterWorkflow(workflows.LikeSkillWorkflow)
 	// S2 §3.2：周内容 workflow（审批卡点示范）跑在 flex-queue
 	agentWorkers[1].RegisterWorkflow(workflows.WeeklyContentWorkflow)
 	agentWorkers[2].RegisterWorkflow(workflows.ScheduledFetchWorkflow)

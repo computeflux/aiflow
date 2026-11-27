@@ -54,32 +54,6 @@ type AutoTweetResult struct {
 	TotalScored int           `json:"total_scored"`
 }
 
-// LikeTarget is a single tweet to like, sent to the pyreplay Python worker.
-type LikeTarget struct {
-	TweetID  string `json:"tweet_id"`
-	TweetURL string `json:"tweet_url"`
-	Author   string `json:"author"`
-	Content  string `json:"content"`
-}
-
-// LikeBatchInput is sent to pyreplay's LikeActivities.like_batch.
-type LikeBatchInput struct {
-	Targets      []LikeTarget `json:"targets"`
-	DelayBetween float64      `json:"delay_between"`
-}
-
-// LikeItemResult is the outcome of liking a single tweet.
-type LikeItemResult struct {
-	TweetID  string `json:"tweet_id"`
-	TweetURL string `json:"tweet_url"`
-	Success  bool   `json:"success"`
-	Error    string `json:"error"`
-}
-
-// LikeBatchResult is returned by pyreplay's LikeActivities.like_batch.
-type LikeBatchResult struct {
-	Total   int              `json:"total"`
-	Success int              `json:"success"`
-	Failed  int              `json:"failed"`
-	Results []LikeItemResult `json:"results"`
-}
+// 点赞相关的载荷类型在 M3-2 收口到 skill 契约：workflow 侧用 skillcontract.LikeInput /
+// skillcontract.Output 与 skill 'like' 对话，本文件不再保留发给 pyreplay worker 的
+// LikeTarget / LikeBatchInput / LikeBatchResult（旧直连链路的遗留类型）。

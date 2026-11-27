@@ -28,6 +28,7 @@ from temporalio.worker import (
 from adapters.models import LikeResult, LikeTarget, XAccount
 from adapters.x_like import XLikeAdapter
 from services.account_manager import AccountManager
+from services.like_skill import LikeSkill
 from telemetry import current_trace_id, init_tracing, traced
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -102,6 +103,10 @@ _MAX_JOB_ATTEMPTS = 5
 # 一次点赞会话最多点赞条数（随机 1~N，模拟真人一次浏览点多个帖子）
 _LIKE_BATCH_MAX = int(_x_config.get("like_batch_size_max", 3) or 3)
 
+
+def _picked_account_ids(outcome: dict[str, Any]) -> set[int]:
+    """从 like 技能输出里取本次调用用过的账号 id（批量入口的账号去重范围）。"""
+    return {int(i) for i in outcome.get("account_ids") or []}
 
 def _random_delay() -> float:
     return random.uniform(_MIN_DELAY, _MAX_DELAY)
@@ -281,6 +286,40 @@ def _save_result(
         logger.warning("failed to save like result: %s", exc)
 
 
+class _WorkerLikeStore:
+    """Temporal worker 侧的 like 技能落库接缝（like_records + error_logs）。
+
+    与 skill_server.py 的 `_SkillStore` 同表同结构：skill HTTP 调用与 Temporal
+    activity 调用写进同一份点赞流水，board 的点赞记录/错误日志页不必分两处看。
+    """
+
+    def __init__(self, machine_id: str = "") -> None:
+        self.machine_id = machine_id
+
+    def save_like_record(self, result: LikeResult, account: Any = None) -> None:
+        _save_result(result, machine_id=self.machine_id, account=account)
+
+
+class _WorkerAccountPool:
+    """Temporal worker 侧的账号池接缝（复用 AccountManager 的冷却/每日限额策略）。"""
+
+    def pick_account(self, excluded: set[int] | None = None) -> XAccount | None:
+        return _account_manager.pick_exclude_many(excluded)
+
+    def mark_used(self, account_id: int) -> None:
+        _account_manager.mark_used(account_id)
+
+
+# skill 'like' 内核实例（worker 进程内单例）：Temporal activity 与 skill HTTP 服务
+# （独立进程）共用同一实现，两条链路的 schema / 账号轮换 / 落库口径完全一致。
+# 延迟装配：账号池与落库接缝都是薄壳（内部惰性取连接），构造它们不碰任何外部资源。
+_like_skill = LikeSkill(
+    liker=_x_like,
+    accounts=_WorkerAccountPool(),
+    store=_WorkerLikeStore(_MACHINE_ID),
+    machine_id=_MACHINE_ID,
+)
+
 def _ensure_like_records_table() -> None:
     """兜底创建 like_records（含 machine_id / account 列，账号级去重）。
 
@@ -388,32 +427,35 @@ class LikeActivities:
     @activity.defn(name="LikeActivities.like")
     @traced("LikeActivities.like")
     async def like(self, input: LikeInput) -> dict[str, Any]:
-        target = LikeTarget(
-            tweet_id=input.tweet_id,
-            tweet_url=input.tweet_url,
+        """点赞单条推文：走 skill 'like' 内核（与 skill HTTP 服务同一实现与 schema）。
+
+        返回值保持旧 activity 契约（tweet_id / tweet_url / success / error）：Go 侧的
+        LikeWorkflow 已在 M3-2 删除（board 的 /api/like 改走 LikeSkillWorkflow → Skill 网关），
+        这两个 activity 保留给 pyreplay 任务队列上的既有调用方与手工投递的任务（Go 侧已无
+        调用点；board 的点赞走 Skill 网关），行为与 skill schema 逐字段一致。
+        """
+        result = await _like_skill.run(
+            input.tweet_url or f"https://x.com/i/status/{input.tweet_id}",
+            1,
             author=input.author,
             content=input.content,
         )
-        account = _account_manager.pick()
-        cookies = (
-            _x_like.account_cookies(account)
-            if account is not None
-            else None
-        )
-        result = await _x_like.like(target, cookies=cookies)
-        if account is not None:
-            _account_manager.mark_used(account.id)
-        _save_result(result, machine_id=_MACHINE_ID, account=account)
+        first = result["results"][0] if result["results"] else {}
         return {
-            "tweet_id": result.tweet_id,
-            "tweet_url": result.tweet_url,
-            "success": result.success,
-            "error": result.error,
+            "tweet_id": result["tweet_id"] or input.tweet_id,
+            "tweet_url": input.tweet_url,
+            "success": bool(result["success_count"]),
+            "error": "" if result["success_count"] else (first.get("error") or result["reason"]),
         }
 
     @activity.defn(name="LikeActivities.like_batch")
     @traced("LikeActivities.like_batch")
     async def like_batch(self, input: LikeBatchInput) -> dict[str, Any]:
+        """批量点赞：逐条走 skill 'like' 内核，账号在整批内去重轮换。
+
+        返回值保持旧 activity 契约 `{total, success, failed, results[]}`；
+        逐条明细的 tweet_url 由推文 URL 回填（内核只回报 tweet_id）。
+        """
         targets = [
             LikeTarget(
                 tweet_id=t.get("tweet_id", ""),
@@ -426,22 +468,27 @@ class LikeActivities:
         # 随机打乱顺序，避免固定顺序操作
         random.shuffle(targets)
 
-        results: list[LikeResult] = []
-        last_account_id: int | None = None
+        used_account_ids: set[int] = set()
+        results: list[dict[str, Any]] = []
+        success = 0
         for i, target in enumerate(targets):
-            # 随机挑账号，并避免与上一个相同
-            account = _account_manager.pick(exclude_id=last_account_id)
-            cookies = (
-                _x_like.account_cookies(account)
-                if account is not None
-                else None
+            outcome = await _like_skill.run(
+                target.tweet_url or f"https://x.com/i/status/{target.tweet_id}",
+                1,
+                author=target.author,
+                content=target.content,
+                excluded_account_ids=set(used_account_ids),
             )
-            result = await _x_like.like(target, cookies=cookies)
-            if account is not None:
-                _account_manager.mark_used(account.id)
-                last_account_id = account.id
-            _save_result(result, machine_id=_MACHINE_ID, account=account)
-            results.append(result)
+            used_account_ids |= _picked_account_ids(outcome)
+            ok = bool(outcome["success_count"])
+            success += 1 if ok else 0
+            first = outcome["results"][0] if outcome["results"] else {}
+            results.append({
+                "tweet_id": outcome["tweet_id"] or target.tweet_id,
+                "tweet_url": target.tweet_url,
+                "success": ok,
+                "error": "" if ok else (first.get("error") or outcome["reason"]),
+            })
 
             if i < len(targets) - 1:
                 # 随机间隔（默认 30~180 秒），覆盖输入里的固定 delay
@@ -449,17 +496,9 @@ class LikeActivities:
 
         return {
             "total": len(results),
-            "success": sum(1 for r in results if r.success),
-            "failed": sum(1 for r in results if not r.success),
-            "results": [
-                {
-                    "tweet_id": r.tweet_id,
-                    "tweet_url": r.tweet_url,
-                    "success": r.success,
-                    "error": r.error,
-                }
-                for r in results
-            ],
+            "success": success,
+            "failed": len(results) - success,
+            "results": results,
         }
 
 
@@ -748,10 +787,45 @@ def _claim_due_job(machine_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _load_batch_extra_tweets(
-    handle: str, account: XAccount, exclude_tweet_id: str, limit: int
-) -> list[dict[str, str]]:
-    """随机取同 handle 尚未点赞的推文作为会话补充（排除本账号已点过的），最多 limit 条。"""
+def _machine_liked(tweet_id: str, machine_id: str) -> bool:
+    """本机（任意账号）是否已成功点过该推文（like_records 安全网）。"""
+    try:
+        conn = _get_mysql()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM like_records WHERE tweet_id = %s AND machine_id = %s "
+                "AND success = 1 LIMIT 1",
+                (tweet_id, machine_id),
+            )
+            return cur.fetchone() is not None
+    except Exception as exc:
+        logger.warning("failed to check like_records for %s: %s", tweet_id, exc)
+        return False
+
+
+def _accounts_liked_by_machine(tweet_id: str, machine_id: str) -> set[int]:
+    """本机已成功点过该推文的账号 id 集合（点赞前的账号级去重依据）。"""
+    try:
+        conn = _get_mysql()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT account_id FROM like_records WHERE tweet_id = %s AND machine_id = %s "
+                "AND account_id IS NOT NULL AND success = 1",
+                (tweet_id, machine_id),
+            )
+            return {int(r["account_id"]) for r in cur.fetchall()}
+    except Exception as exc:
+        logger.warning("failed to load liked accounts for %s: %s", tweet_id, exc)
+        return set()
+
+def _load_batch_candidates(handle: str, exclude_tweet_id: str, limit: int) -> list[dict[str, str]]:
+    """随机取同 handle 最近 N 天内尚未点赞（raw_items.liked=0）的推文作为会话补充候选。
+
+    会话批次里的补充推文在**选账号之前**就要取（账号由 like 技能内核在第一次点赞时
+    选出并锁进整场会话），因此这里只做「本机维度」的过滤：未点赞 + 排除主推文 +
+    时效窗口。账号维度的去重（本账号已点过该推文）由 like 技能内核的账号级去重与
+    like_records 的唯一键兜底，不再依赖查询时已知 account_id。
+    """
     if limit <= 0 or not handle:
         return []
     cutoff = (
@@ -765,17 +839,12 @@ def _load_batch_extra_tweets(
                 "SELECT external_id, url, content FROM raw_items "
                 "WHERE source = 'x' AND keyword = %s AND liked = 0 "
                 "AND published_at >= %s AND external_id != %s "
-                "AND external_id NOT IN ("
-                "  SELECT CONCAT('x_', tweet_id) COLLATE utf8mb4_unicode_ci "
-                "  FROM like_records "
-                "  WHERE account_id = %s AND success = 1"
-                ") "
                 "ORDER BY RAND() LIMIT %s",
-                (handle, cutoff, f"x_{exclude_tweet_id}", account.id, limit),
+                (handle, cutoff, f"x_{exclude_tweet_id}", limit),
             )
             rows = [dict(r) for r in cur.fetchall()]
     except Exception as exc:
-        logger.warning("failed to load batch extra tweets for @%s: %s", handle, exc)
+        logger.warning("failed to load batch candidates for @%s: %s", handle, exc)
         return []
     out: list[dict[str, str]] = []
     for r in rows:
@@ -790,49 +859,66 @@ def _load_batch_extra_tweets(
         })
     return out
 
+class _SessionAccountPool:
+    """like_jobs 会话执行器的账号池接缝：整场会话锁定同一个账号。
+
+    会话批次（主推文 + 同 handle 补充推文）必须用同一个账号点赞 —— 这是「一次浏览
+    点多个帖子」的拟人化前提。实现：第一次取号后记住它，后续调用只返回同一个账号；
+    取不到（全在冷却/已点过）返回 None，由内核按无登录态发起并如实回报失败。
+    """
+
+    def __init__(self) -> None:
+        # 起点排除集留空：like_jobs 的账号级去重按「推文 × 账号」记在 like_records 里，
+        # 会话内每处理一条推文就把该推文本机已点过的账号并进排除集
+        # （见 _execute_like_job 里的 _accounts_liked_by_machine）。
+        self._excluded: set[int] = set()
+        self._account: XAccount | None = None
+
+    @property
+    def account(self) -> XAccount | None:
+        """会话锁定的账号（第一次取号后固定不变；取不到 = None）。"""
+        return self._account
+
+    def pick_account(self, excluded: set[int] | None = None) -> XAccount | None:
+        if self._account is not None:
+            return self._account
+        merged = set(self._excluded) | set(excluded or set())
+        self._account = _account_manager.pick_exclude_many(merged)
+        return self._account
+
+    def exclude(self, account_ids: set[int]) -> None:
+        """并入「已点过当前推文的账号」：本会话账号点过的推文绝不重复点。"""
+        self._excluded |= account_ids
+
+    def mark_used(self, account_id: int) -> None:
+        # 会话内的账号记账统一在会话结束时做一次（见 _execute_like_job），
+        # 这里必须什么都不做：逐条 mark_used 会让一次会话把账号限额刷成 N 次。
+        return None
+
 
 @traced("pyreplay.execute_like_job")
 async def _execute_like_job(row: dict[str, Any]) -> None:
-    """执行一个已抢占的点赞任务：一次会话随机点赞 1~N 条。
+    """执行一个已抢占的点赞任务：一次会话随机点赞 1~N 条（逐条走 like 技能内核）。
 
     主推文（任务对应的那条）+ 随机补充同 handle 未点赞推文，模拟真人一次
     浏览点多个帖子；会话内用同一账号，间隔随机 30~180 秒。补充推文点赞
     成功后直接完成其本机任务，避免到点重复执行。
+
+    与 skill 'like' 的口径对齐：点赞动作、逐条 like_records 落库、失败写
+    error_logs，全部由 :class:`services.like_skill.LikeSkill` 负责；本函数只保留
+    like_jobs 特有的任务状态机（finish / complete / requeue）与 raw_items 回写。
     """
     tweet_id = str(row["tweet_id"])
     machine_id = _MACHINE_ID
     handle = str(row.get("handle") or "")
 
-    # 账号级去重：找出本机已点过该推文的账号并排除
-    excluded: set[int] = set()
-    try:
-        conn = _get_mysql()
-        with conn.cursor() as cur:
-            # 安全网：本机已点过该推文（like_records 里已有成功记录）直接完成
-            cur.execute(
-                "SELECT id FROM like_records WHERE tweet_id = %s AND machine_id = %s "
-                "AND success = 1 LIMIT 1",
-                (tweet_id, machine_id),
-            )
-            if cur.fetchone() is not None:
-                _finish_job(row["id"])
-                return
-            cur.execute(
-                "SELECT account_id FROM like_records WHERE tweet_id = %s AND machine_id = %s "
-                "AND account_id IS NOT NULL AND success = 1",
-                (tweet_id, machine_id),
-            )
-            excluded = {int(r["account_id"]) for r in cur.fetchall()}
-    except Exception as exc:
-        logger.warning("failed to check like_records for %s: %s", tweet_id, exc)
-
-    account = _account_manager.pick_exclude_many(excluded)
-    if account is None:
-        # 本机账号都用过了（或都在冷却）——顺延重试
-        _requeue_job(row["id"], error="no eligible account on this machine", attempts=row["attempts"])
+    # 安全网：本机（任意账号）已点过主推文 → 任务直接完成，不再起浏览器会话
+    if _machine_liked(tweet_id, machine_id):
+        _finish_job(row["id"])
         return
 
-    # 组装会话批次：主推文 + 随机 0~N-1 条同 handle 未点赞推文，打乱顺序更像真人
+    # 会话批次：主推文 + 随机 0~N-1 条同 handle 未点赞推文，打乱顺序更像真人。
+    # 补充推文的候选先取（不依赖账号），账号由内核在第一次点赞时选出并锁进会话。
     batch: list[dict[str, Any]] = [{
         "tweet_id": tweet_id,
         "url": row["tweet_url"] or f"https://x.com/i/status/{tweet_id}",
@@ -841,61 +927,58 @@ async def _execute_like_job(row: dict[str, Any]) -> None:
     }]
     extra_limit = random.randint(1, _LIKE_BATCH_MAX) - 1
     if extra_limit > 0 and handle:
-        for t in _load_batch_extra_tweets(handle, account, tweet_id, extra_limit):
+        for t in _load_batch_candidates(handle, tweet_id, extra_limit):
             batch.append({**t, "primary": False})
     random.shuffle(batch)
 
-    logger.info(
-        "like session: %d tweet(s) for @%s, account=%s",
-        len(batch), handle or "-", account.username,
+    pool = _SessionAccountPool()
+    session = LikeSkill(
+        liker=_x_like,
+        accounts=pool,
+        store=_WorkerLikeStore(machine_id),
+        machine_id=machine_id,
     )
+
     primary_success = False
     primary_error = ""
     for i, t in enumerate(batch):
-        target = LikeTarget(
-            tweet_id=t["tweet_id"],
-            tweet_url=t["url"],
+        # 逐条做账号级去重：本机已点过该推文的账号不再被选中（会话账号若在其中，
+        # 内核会取不到号 → 按无登录态发起并如实回报失败，绝不重复点赞）。
+        excluded = _accounts_liked_by_machine(t["tweet_id"], machine_id)
+        pool.exclude(excluded)
+
+        outcome = await session.run(
+            t["url"],
+            1,
             content=t["content"],
+            excluded_account_ids=excluded,
         )
-        result = await _x_like.like(target, cookies=_x_like.account_cookies(account))
-        _save_result(result, machine_id=machine_id, account=account)
-        if not result.success:
-            # 单条点赞失败也写入 error_logs，board 的“错误日志”页（/errors）统一查看与处理
-            _log_error(
-                source="like_executor",
-                message=(
-                    f"like failed: tweet {t['tweet_id']} (@{handle or '-'}) "
-                    f"account={account.username}: {result.error}"
-                ),
-                context=json.dumps({
-                    "tweet_id": t["tweet_id"],
-                    "tweet_url": t["tweet_url"],
-                    "handle": handle,
-                    "account_id": account.id,
-                    "account_username": account.username,
-                    "machine_id": machine_id,
-                    "primary": t["primary"],
-                }, ensure_ascii=False),
-            )
-        if result.success:
+        ok = bool(outcome["success_count"])
+        first = outcome["results"][0] if outcome["results"] else {}
+        error = "" if ok else (first.get("error") or outcome["reason"])
+
+        if ok:
             _mark_raw_item_liked(t["tweet_id"])
             if t["primary"]:
                 primary_success = True
-                _finish_job(row["id"], account=account)
+                _finish_job(row["id"], account=pool.account)
             else:
-                _complete_machine_job(t["tweet_id"], account)
+                _complete_machine_job(t["tweet_id"], pool.account)
         elif t["primary"]:
-            primary_error = result.error or ""
+            primary_error = error
+
         logger.info(
             "  [%d/%d] tweet %s -> %s%s",
             i + 1, len(batch), t["tweet_id"],
-            "OK" if result.success else "FAIL",
-            "" if result.success else f": {result.error}",
+            "OK" if ok else "FAIL",
+            "" if ok else f": {error}",
         )
         if i < len(batch) - 1:
             await asyncio.sleep(_random_delay())
 
-    _account_manager.mark_used(account.id)
+    # 会话级记账：整场会话只算一次使用（冷却与每日限额按会话计，不按条计）
+    if pool.account is not None:
+        _account_manager.mark_used(pool.account.id)
     if not primary_success:
         _requeue_job(row["id"], error=primary_error, attempts=row["attempts"])
 
