@@ -1,0 +1,61 @@
+# MIG-1（工作项 wi-1795853890）：skill 网关 x-scan / like 切流到 social 的**注册表快照**。
+#
+# 与 deploy/compose/core/{pycraper,pyreplay}.yml 的关系：那两份 compose 文件是「旧实现仍在
+# 线」时的部署形态；本文件是切流收尾（skill-cutover complete）之后的部署形态 —— social
+# 承接 x-scan / like，旧容器停止并移出统一 compose（MIG-1 步骤 4，需 admin 执行）。
+#
+# 为什么要有一份可被单测读取的注册表快照（MIG-1 步骤 5「更新注册表」）：
+#   - skill 的 addr 只写在 MySQL（skills / skill_versions.config），仓库里没有任何一处能
+#     回答「x-scan / like 现在指向谁」，运维与后续卡片只能靠人记；
+#   - 注册表快照 + deploy/compose 清单一起进单测（见 apps/core/internal/migration/
+#     cutover_registry_test.go），任何一处回摆（compose 又把旧服务挂回主链路、addr 写回
+#     pycraper/pyreplay）都会让测试红，而不是等到线上少了一个消费方才发现。
+#
+# ⚠️ 本文件是**声明**，不是执行器：停容器由运维按 `GET /skill-decommission/plan` 的清单
+# 人工执行（migration/decommission.go 的红线），这里不产生任何部署副作用。
+skills:
+  # x-scan：X 用户主页推文抓取。收口前 = http://pycraper:9504/scan（apps/pycraper/skill.json）。
+  - name: x-scan
+    version: 2.0.0
+    runtime: go
+    type: service
+    # social 的 X 渠道搜索：GET /api/social/x/search?keyword=&limit=（apps/social/main.go 的 route）
+    # 网关侧的 social 转发把 skill 输入映射成该查询并归一响应（skillgateway/social_invoker.go）。
+    addr: http://social:8010/x-scan
+    image: social:latest
+    container: social
+    limits:
+      timeout_sec: 300
+      rate_per_min: 2
+      max_concurrency: 1
+
+  # like：X 点赞。收口前 = http://pyreplay:9500/like（apps/pyreplay/skill.json）。
+  - name: like
+    version: 2.0.0
+    runtime: go
+    type: service
+    # social 的互动路由：POST /api/social/x/interact {"action":"like","video_id":"<推文 URL>"}
+    addr: http://social:8010/like
+    image: social:latest
+    container: social
+    limits:
+      timeout_sec: 180
+      rate_per_min: 2
+      max_concurrency: 1
+
+# 已下线的旧实现（MIG-1 步骤 4）：从 deploy/docker-compose.yml 的 include 清单移出主链路，
+# 保留文件本体供回滚（skill-cutover rollback 之后旧实现必须还能被拉起来）。
+decommissioned:
+  - service: pycraper
+    skill: x-scan
+    addr: http://pycraper:9504/scan
+    compose: deploy/compose/core/pycraper.yml
+    # pycraper 还承载 Temporal 的 FetchActivities/PublishActivities（python task queue），
+    # 停容器前必须确认无在跑任务；见 decommission.go 的 LegacyService 注释。
+    note: X 抓取能力已收口到 social 的 x 渠道（internal/search/x_adapter.go）
+  - service: pyreplay
+    skill: like
+    addr: http://pyreplay:9500/like
+    compose: deploy/compose/core/pyreplay.yml
+    # pyreplay 还承载 LikeActivities + like_jobs 后台执行器 + M1-4 login_worker 消费端。
+    note: X 点赞能力已收口到 social 的 x 渠道（internal/channel/x.go）

@@ -1,7 +1,15 @@
 # PyCrawler（X/Reddit/GitHub/小红书抓取 worker；Temporal activity + MySQL 落库）
 # 复用 apps/pycraper 既有 Dockerfile；env_file 后 environment 覆盖端点为容器名 DNS
+#
+# ⚠️ MIG-1（工作项 wi-1795853890）：x-scan skill 已收口到 social（skill 网关的 addr =
+# http://social:8010/x-scan），本服务退出主链路 —— profiles: [legacy] 让全量
+# `docker compose up -d --build` 不再拉起它（停旧容器 = 下线清单里的动作，需 admin 执行，
+# 见 apps/core/internal/migration/decommission.go）。
+# 文件本体与 include 保留：`docker compose --profile legacy up -d pycraper` 是
+# skill-cutover rollback 之后把旧实现拉回来的唯一路径，删文件等于把回滚路径一起删掉。
 services:
   pycraper:
+    profiles: [legacy]
     image: pycraper:latest
     build:
       context: ../../../apps/pycraper

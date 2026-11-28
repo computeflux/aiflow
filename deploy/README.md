@@ -59,6 +59,24 @@ docker logs <svc>                               # 日志
 
 ⚠️ `docker compose restart <svc>` 只重启旧镜像，不加载新代码；改代码后一律 `up -d --build <svc>`。
 
+⚠️ **MIG-1（工作项 wi-1795853890）：`pycraper` 与 `pyreplay` 的 x-scan / like 已收口到 `social`。**
+
+**执行进度（2026-12-05）**：步骤 1（引用盘点）/ 2（网关地址口径 + social 转发）/ 5（注册表快照与同步）
+= **代码与部署形态已完成**；步骤 3（10%→50%→100% 逐档放量 + 成功率/ parity 核验）与步骤 4
+（停旧容器）= **运维动作，待执行**（都要 admin，逐条留痕）。
+
+两份 compose 文件保留，但服务挂了 `profiles: [legacy]`：
+- `docker compose up -d --build`（全量启动）**不再拉起**这两个容器 —— x-scan / like 两条能力
+  已收口到 `social`（skill 网关 addr = `http://social:8010/x-scan`、`http://social:8010/like`）。
+- 回滚路径保留：`docker compose --profile legacy up -d pycraper pyreplay` 可把旧实现拉回来
+  （先 `POST /api/skill-cutover/<skill>/rollback` 把流量退回旧版本，再拉容器）。
+- 停/删运行中的旧容器是**下线清单**里的动作，需 admin：`GET /api/skill-decommission/plan`
+  看逐服务判定与阻断项（切流未收尾、观察窗未满、质量证据不达标、旧 addr 仍有调用 = 阻断）。
+- 注册表快照（收口后 x-scan / like 应该长什么样）在 `apps/core/hacks/skill-registry/mig1-social.yaml`，
+  由 `GET /api/skill-registry/snapshot` 读取校验、`POST /api/skill-registry/snapshot/sync[?dry_run=1]`
+  登记零流量的目标版本（admin）。快照 addr ↔ 网关常量 ↔ compose include 的一致性由
+  `apps/core/internal/migration/cutover_registry_test.go` 钉住。
+
 ⚠️ **改根 `.env` 后，已创建的容器不会生效**：compose 的 `env_file` 在**容器创建时**固化（`restart` 也不重读）。
 必须 `docker compose up -d <svc>`（或全量 `docker compose up -d`）让 compose 按配置漂移自动重建；
 2026-09-30 事故：`.env` 换了 LLM 网关后 audit/api 等仍是旧值（audit LLM 摘要 404 降级）。
@@ -96,9 +114,9 @@ docker logs <svc>                               # 日志
 | 对外 | 5181 | **board 前端是唯一对外主入口**（core-ui 单容器 :5181 单入口 SPA：`/ops/` 运维中心 + `/product/` 产品与任务 + `/content/` 内容生产 + `/email/` 邮件，`/` 302 → `/ops/`，SSO 登录枢纽 `/ops/login`；nginx 同源代理 `/api/`→workflow-api:8001、`/mailer/`→mailer:8003、`/jaeger/`→jaeger:16686） |
 | 对外 | 8008 | auth（浏览器 web3auth SDK 跨源直连，auth 侧已开 CORS） |
 | 对外 | 8443 | pi-web（**HTTPS**，nginx-pi TLS 终结；证书 = token 节点 DigiCert DV `xiaobai.asyou.me`/`www.xiaobai.asyou.me`，bind mount 自 `/srv/token_node0/token_chain_data/ssl/`，到期 2026-10-26，续期替换文件即可；访问 `https://xiaobai.asyou.me:8443/`；PI_WEB_PASSWORD Basic Auth 纵深防御，用户名固定 `pi`；⚠️ nginx 的 Host 头必须用 `$http_host` 保留端口，否则 pi-web 同源自检 403；upstream → 宿主 pi-web :30141（systemd 用户单元 `pi-web.service`）；偏离 S0 端口最小化的例外） |
-| 127.0.0.1 | 8001 / 8003 / 3306 / 7233 / 5432 / 9500 | api / mailer / mysql / temporal / temporal-pg / pyreplay |
+| 127.0.0.1 | 8001 / 8003 / 3306 / 7233 / 5432 / 9500 | api / mailer / mysql / temporal / temporal-pg / pyreplay（MIG-1 后 = legacy profile，全量 up 不启动） |
 | 127.0.0.1 | 8233 / 6333 / 6334 / 4007 | temporal-ui / qdrant（UI + gRPC） / postiz（第三方，调试用） |
-| 仅内部网络 | 4317 / 4318 / 16686 / 9501–9504 / 8008 | otel / jaeger / 三技能 / pycraper x-scan 端点（9504） / synapse（8008 容器内网；宿主 8008 已让给 auth 容器发布；S4 Matrix 审批 Bot `matrix-bot` :8126 健康探针同属内部网络） |
+| 仅内部网络 | 4317 / 4318 / 16686 / 9501–9504 / 8008 | otel / jaeger / 三技能 / pycraper x-scan 端点（9504，MIG-1 后 legacy profile；线上 x-scan 走 social :8010） / synapse（8008 容器内网；宿主 8008 已让给 auth 容器发布；S4 Matrix 审批 Bot `matrix-bot` :8126 健康探针同属内部网络） |
 | 仅内部网络 | 8127 | S5 健康巡检 `health-patrol` 健康探针（不发布宿主端口） |
 
 ## 数据（named volume，两侧共享，切换部署方式不丢数据）

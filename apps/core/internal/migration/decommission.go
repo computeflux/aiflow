@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/wetee/ai-workflow/internal/db"
+	"github.com/wetee/ai-workflow/internal/skillgateway"
 	"gorm.io/gorm"
 )
 
@@ -55,8 +56,8 @@ type LegacyService struct {
 // DefaultLegacyServices 是 M4-1 收口的两条能力对应的旧服务。
 func DefaultLegacyServices() []LegacyService {
 	return []LegacyService{
-		{Service: "pycraper", Skill: "x-scan", Addr: "http://pycraper:9504"},
-		{Service: "pyreplay", Skill: "like", Addr: "http://pyreplay:9500"},
+		{Service: "pycraper", Skill: "x-scan", Addr: skillgateway.LegacyAddrForSkill("x-scan")},
+		{Service: "pyreplay", Skill: "like", Addr: skillgateway.LegacyAddrForSkill("like")},
 	}
 }
 

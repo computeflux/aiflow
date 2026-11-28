@@ -1,8 +1,16 @@
 # PyReplay（X 点赞/执行 worker；Temporal activity + 后台 like_jobs 执行器）
 # 同时提供 like 技能 HTTP 端点 :9500（skill registry 中 addr=pyreplay:9500，仅内部网络；
 # 127.0.0.1:9500 保留给宿主工具）
+#
+# ⚠️ MIG-1（工作项 wi-1795853890）：like skill 已收口到 social（skill 网关的 addr =
+# http://social:8010/like），本服务退出主链路 —— profiles: [legacy] 让全量
+# `docker compose up -d --build` 不再拉起它（停旧容器 = 下线清单里的动作，需 admin 执行，
+# 见 apps/core/internal/migration/decommission.go）。
+# 文件本体与 include 保留：`docker compose --profile legacy up -d pyreplay` 是
+# skill-cutover rollback 之后把旧实现拉回来的唯一路径，删文件等于把回滚路径一起删掉。
 services:
   pyreplay:
+    profiles: [legacy]
     image: pyreplay:latest
     build:
       context: ../../../apps/pyreplay

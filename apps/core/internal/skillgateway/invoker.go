@@ -23,7 +23,7 @@ const (
 
 // invokeService 通过 HTTP POST {addr}/invoke 调用 service 型 skill。
 // trace 传播由调用方（runner）在 ctx 中携带，这里只负责执行与解析。
-func invokeService(ctx context.Context, spec *SkillSpec, input map[string]any) (map[string]any, error) {
+func invokeService(ctx context.Context, spec *SkillSpec, input map[string]any, rt ...http.RoundTripper) (map[string]any, error) {
 	addr := strings.TrimSuffix(spec.Addr, "/")
 	if addr == "" {
 		return nil, fmt.Errorf("skill addr 为空")
@@ -34,7 +34,16 @@ func invokeService(ctx context.Context, spec *SkillSpec, input map[string]any) (
 		return nil, fmt.Errorf("序列化输入失败: %w", err)
 	}
 
-	client := &http.Client{}
+	// serviceTransport 是测试注入点（nil = http.DefaultTransport）：单测按主机名把连接定向到
+	// 环回上的假服务，生产不设置（见 social_invoker_test.go 的说明）。
+	var transport http.RoundTripper
+	if len(rt) > 0 {
+		transport = rt[0]
+	}
+	if transport == nil {
+		transport = serviceTransport
+	}
+	client := &http.Client{Transport: transport}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr+"/invoke", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("构建请求失败: %w", err)
@@ -136,6 +145,14 @@ func buildCLIArgs(spec *SkillSpec) []string {
 	}
 	return strings.Fields(spec.Entrypoint)
 }
+
+// serviceTransport 是 service 型 skill 的 transport 注入点（仅测试用；生产恒为 nil =
+// http.DefaultTransport）。注入点放在包内变量而不是改 http.DefaultClient：单测要按主机名把
+// 连接定向到环回上的假服务，绝不能动全局 transport（会连带影响同进程里的其它调用与并发用例）。
+var serviceTransport http.RoundTripper
+
+// SetServiceTransportForTest 注入 service 调用的 transport（传 nil = 恢复默认）。
+func SetServiceTransportForTest(rt http.RoundTripper) { serviceTransport = rt }
 
 // cappedBuffer 是带上限的字节缓冲：超过 max 后丢弃新增内容，
 // 但 Write 恒返回 len(p)（从不短写），防止子进程因管道写满而阻塞。

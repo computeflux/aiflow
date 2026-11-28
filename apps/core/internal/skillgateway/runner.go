@@ -258,10 +258,21 @@ func (r *Runner) Invoke(ctx context.Context, name string, input map[string]any, 
 	return &InvokeResult{Output: out}, nil
 }
 
-// invoke 按 skill type 分派执行。
-func invoke(ctx context.Context, spec *SkillSpec, input map[string]any) (map[string]any, error) {
+// invoke 按 skill type 分派执行（rt = transport 注入点，nil = serviceTransport / 默认）。
+//
+// MIG-1（工作项 wi-1795853890）：addr 指向 social 时走 invokeSocial —— social 是多渠道
+// 服务，x-scan / like 挂在 /api/social/{channel}/{action} 上，没有 pycraper / pyreplay
+// 那种「每进程一个 skill 的 /invoke」端点，直接拼 /invoke 只会 404（切流一放量就断流）。
+func invoke(ctx context.Context, spec *SkillSpec, input map[string]any, rt ...http.RoundTripper) (map[string]any, error) {
 	if spec.Type == "service" {
-		return invokeService(ctx, spec, input)
+		var transport http.RoundTripper
+		if len(rt) > 0 {
+			transport = rt[0]
+		}
+		if addr := socialBaseOf(spec.Addr); addr != "" {
+			return invokeSocialWithTransport(ctx, transport, spec.Name, addr, input)
+		}
+		return invokeService(ctx, spec, input, transport)
 	}
 	return invokeCLI(ctx, spec, input)
 }

@@ -94,6 +94,18 @@ func registerSkillGatewayRoutes(
 	}
 	migration.RegisterRoutes(r, cutoverSvc,
 		migration.NewDecommission(database.DB, cutoverSvc.Config(), stableWindow), requireAuth(), requireRole("admin"))
+	// MIG-1（工作项 wi-1795853890）步骤 2/5：注册表快照（apps/core/hacks/skill-registry/
+	// mig1-social.yaml）的查看与同步端点。鉴权口径与切流完全一致：同步会往 skill_versions
+	// 写版本行（改路由池），必须 admin；收尾前它只建零流量 draft，放量仍要走 /skill-cutover。
+	// 快照根目录用 REPO_ROOT 覆盖（容器内挂载 monorepo 根的路径），缺省取当前工作目录
+	// （cmd/api 本地跑时 = apps/core，向上可找到 deploy/docker-compose.yml）。
+	registryRoot := os.Getenv("REPO_ROOT")
+	if registryRoot == "" {
+		if wd, werr := os.Getwd(); werr == nil {
+			registryRoot = wd
+		}
+	}
+	migration.RegistrySnapshotRoutes(r, registryRoot, database.DB, requireAuth(), requireRole("admin"))
 
 	// 切流护栏阈值与下线观察窗都来自同一份 .env（装配期自检，让「配了没生效」在启动日志里
 	// 现形）：NewCutover 的阈值是构造参数，一旦哪天改回写死 CutoverConfig{...}，.env 里的
