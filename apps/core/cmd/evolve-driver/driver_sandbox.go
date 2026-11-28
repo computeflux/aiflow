@@ -91,8 +91,14 @@ func (d *driver) runSandbox(task *db.EvolveTask) (*sandboxResult, bool, error) {
 // 配置性问题（未注册/无命令/无镜像/不在白名单）→ skipped=true（跳过留痕，CI 兜底）；
 // 只有 DB 查询本身出错才返回 error。
 func (d *driver) resolveSandboxTarget(task *db.EvolveTask) (string, string, []string, bool, error) {
+	// 多值目标（如 social,core,core-ui）只认主目标驱动单项目执行（与文档/S9.8 口径一致）；
+	// 直接用整串查 projects 永远不命中 → 沙箱被误跳。
+	name := project.PrimaryTargetName(task.TargetName)
+	if name == "" {
+		return "", "", nil, true, nil // 无有效目标 → 跳过（留痕由调用方打）
+	}
 	var proj project.Project
-	if err := d.db.Table("projects").Where("name = ? AND active = ?", task.TargetName, true).First(&proj).Error; err != nil {
+	if err := d.db.Table("projects").Where("name = ? AND active = ?", name, true).First(&proj).Error; err != nil {
 		return "", "", nil, true, nil // 未注册 → 跳过（留痕由调用方打）
 	}
 	cmd := proj.SandboxCmd()
@@ -131,11 +137,16 @@ func (d *driver) versionName(task *db.EvolveTask) string {
 
 // targetAppDir 解析目标（项目）对应的 apps/ 目录名（S9.8 §7.10 只按项目识别）。
 func (d *driver) targetAppDir(task *db.EvolveTask) (string, error) {
+	// 多值目标只认主目标（第一个）确定 apps/ 目录，与沙箱/CD 口径一致。
+	name := project.PrimaryTargetName(task.TargetName)
+	if name == "" {
+		return "", fmt.Errorf("目标 %q 无有效项目名（无法确定 apps/ 目录）", task.TargetName)
+	}
 	var proj project.Project
-	if err := d.db.Table("projects").Where("name = ? AND active = ?", task.TargetName, true).First(&proj).Error; err == nil {
+	if err := d.db.Table("projects").Where("name = ? AND active = ?", name, true).First(&proj).Error; err == nil {
 		return proj.Name, nil
 	}
-	return "", fmt.Errorf("目标 %s 未注册（无法确定 apps/ 目录）", task.TargetName)
+	return "", fmt.Errorf("目标 %s 未注册（无法确定 apps/ 目录）", name)
 }
 
 // appAIFlow 读 apps/<app>/.aiflow（应用级流程配置，key: value 行格式），返回键值对。

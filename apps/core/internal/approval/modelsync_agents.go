@@ -151,6 +151,25 @@ type ocrProviderEntry struct {
 
 const managedProviderName = "model-managed"
 
+// piThinkingLevelSuffixes 是 pi enabledModels 条目允许的 ":thinkingLevel" 后缀。
+// 清理旧档案时要先剥掉它再比对模型名（"model-managed/x:high" 与 "model-managed/x" 同模型）。
+var piThinkingLevelSuffixes = map[string]bool{
+	"off": true, "minimal": true, "low": true, "medium": true,
+	"high": true, "xhigh": true, "max": true,
+}
+
+// managedModelBase 判断 enabledModels 条目是否属于本同步器独占的 model-managed 命名空间，
+// 并返回去掉 thinking level 后缀后的模型键。
+func managedModelBase(entry string) (string, bool) {
+	if !strings.HasPrefix(entry, managedProviderName+"/") {
+		return "", false
+	}
+	if i := strings.LastIndex(entry, ":"); i > 0 && piThinkingLevelSuffixes[strings.ToLower(entry[i+1:])] {
+		return entry[:i], true
+	}
+	return entry, true
+}
+
 func profileModel(p db.ModelProfile, apiKey string) map[string]any {
 	return map[string]any{
 		"id":            p.Model,
@@ -241,18 +260,34 @@ func syncPiWebModels(ps []db.ModelProfile, hostHome, activeName, fallbackKey str
 	// ⚠️ 不带 ":*" 后缀：pi 的 scope 解析器把 ":" 后缀当 thinking level（off/low/high…），
 	// "*" 不是合法 level → glob 退化成精确匹配 "model-managed/<model>:*" → 永不命中，
 	// 新档案进不了 scope（报 "Model is not available in the enabled scope"）。
+	//
+	// model-managed 命名空间由本同步器独占：档案改名/删除后，旧条目（如
+	// model-managed/Qwen3.8-27B → Qwen3.8）必须清掉，否则 pi-web 每次解析 enabledModels
+	// 都会报全局警告 "No models match pattern ..."（2026-11-27 实测）。其它 provider /
+	// 通配条目原样保留（用户维护）。
 	settingsPath := filepath.Join(hostHome, ".pi", "agent", "settings.json")
 	settings, err := readJSONFile(settingsPath)
 	if err != nil {
 		return fmt.Sprintf("models.json 已更新（%d 个），settings 读取失败：%v", len(ps), err), nil
 	}
+	current := make(map[string]bool, len(ps))
+	for _, p := range ps {
+		if m := strings.TrimSpace(p.Model); m != "" {
+			current[managedProviderName+"/"+m] = true
+		}
+	}
 	raw, _ := settings["enabledModels"].([]any)
 	seen := map[string]bool{}
 	hasAll := false
+	removed := 0
 	merged := make([]any, 0, len(raw)+len(ps)+1)
 	for _, r := range raw {
 		if s, ok := r.(string); ok {
 			key := strings.TrimSuffix(s, ":*")
+			if base, managed := managedModelBase(key); managed && !current[base] {
+				removed++
+				continue
+			}
 			if key == "*" {
 				hasAll = true
 			}
@@ -278,13 +313,13 @@ func syncPiWebModels(ps []db.ModelProfile, hostHome, activeName, fallbackKey str
 		merged = append(merged, key)
 		added++
 	}
-	if added > 0 || activeName != "" {
+	if added > 0 || removed > 0 || activeName != "" {
 		settings["enabledModels"] = merged
 		if err := writeJSONFileAtomic(settingsPath, settings); err != nil {
 			return fmt.Sprintf("models.json 已更新（%d 个），settings 写入失败：%v", len(ps), err), nil
 		}
 	}
-	return fmt.Sprintf("models.json 已更新（%d 个档案），settings.enabledModels 新增 %d 项（pi-web 重启后模型面板生效）", len(ps), added), nil
+	return fmt.Sprintf("models.json 已更新（%d 个档案），settings.enabledModels 新增 %d 项/清理 %d 项（pi-web 重启后模型面板生效）", len(ps), added, removed), nil
 }
 
 // syncOCRModels 合并写 ~/.opencodereview/config.json 的 custom_providers["model-managed"]。

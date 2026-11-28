@@ -20,6 +20,9 @@ func (d *driver) runTask(task *db.EvolveTask) {
 		log.Printf("evolve %s: 已被看板手动结束（cancelled）→ 跳过执行", task.TaskNo)
 		return
 	}
+	// 目标以卡上当前选择为准（工作项/进化单只是建单时快照）：开跑即同步，
+	// 避免后续日志/沙箱/审批继续用旧目标；每轮范围校验前还会再同步（用户可能运行中补勾目标）。
+	d.syncTaskTargetFromCard(task)
 	// 1. worktree（绝不 push/merge）
 	workdir, err := d.ensureWorktree(task)
 	if err != nil {
@@ -148,6 +151,9 @@ func (d *driver) runTask(task *db.EvolveTask) {
 		}
 
 		// 3. 写范围校验（小范围越界放行：≤N 文件且 >0 且 ≤M 行 → 放行留痕；超阈值打回人工 PR）
+		// 先用卡上最新目标刷新任务：工作项/进化单的目标只是建单时快照，用户后补勾选的目标
+		//（如 core）必须在本轮生效，否则合法 diff 会被按旧目标判越界。
+		d.syncTaskTargetFromCard(task)
 		sc := d.checkScope(task, out)
 		if sc.Violation != "" {
 			_ = d.store.CreateIntervention(d.ctx(), task.TargetName, "manual",
