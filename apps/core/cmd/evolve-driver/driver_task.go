@@ -319,9 +319,10 @@ func (d *driver) agent(role, envFallback string) (*db.AgentRegistry, error) {
 }
 
 // defaultAgentTimeout 未配置 limits.timeout_sec 时的兜底（与 PI_TIMEOUT_SEC 默认一致）。
-// 旧值 25h 会让一个卡死的 agent 阻塞整个执行流近一天（2026-10-29 实测卡片 #128 卡死 50min
-// 才发现，硬超时却要等到 25h）——agent 自己会先按内部预算失败，外层只做安全网。
-const defaultAgentTimeout = 2 * time.Hour
+// 6h：跨服务迁移/大规模重构在本地模型上单轮可能跑数小时；旧值 2h 会把仍在正常推进的
+// 任务误杀（2026-11-27 #10，62 次只读调用后被外层 exec 硬超时）。agent 自己会先按内部
+// 预算失败，外层只做安全网。
+const defaultAgentTimeout = 6 * time.Hour
 
 func agentTimeout(a *db.AgentRegistry) time.Duration {
 	if a.Limits == "" {

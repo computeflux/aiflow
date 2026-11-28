@@ -38,7 +38,7 @@ func TestLoadProject(t *testing.T) {
 		t.Fatalf("expected >= 30 services, got %d", len(p.Services))
 	}
 	// 关键服务存在（board 前端已合并为 core-ui 单容器四路径入口 /ops + /product + /content + /email）
-	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "pycraper", "pyreplay", "temporal", "mysql", "health-patrol", "deployctl"} {
+	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "temporal", "mysql", "health-patrol", "deployctl"} {
 		if p.Services[name] == nil {
 			t.Fatalf("missing service %q", name)
 		}
@@ -64,10 +64,6 @@ func TestLoadProject(t *testing.T) {
 	// healthcheck HTTP 端点推导（core-ui 的 wget 探针，/ops/ 入口）
 	if p.Services["core-ui"].HealthURL != "http://127.0.0.1:80/ops/" {
 		t.Fatalf("core-ui health url = %q", p.Services["core-ui"].HealthURL)
-	}
-	// PID 存活探针无 HTTP 端点
-	if p.Services["pyreplay"].HealthURL != "" {
-		t.Fatalf("pyreplay health url should be empty, got %q", p.Services["pyreplay"].HealthURL)
 	}
 	// tools profile
 	if !p.Services["deployctl"].IsTools() {

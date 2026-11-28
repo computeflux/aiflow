@@ -30,8 +30,8 @@ deploy/
     ├── infra/                  # temporal 栈（pg/server/ui）/ mysql / qdrant / postiz /
     │                           # otel-collector / jaeger / synapse
     ├── core/                   # auth / workflow-api / workflow-go-worker / core-ui(:5181 单容器单入口 SPA
-    │                           # 四路径入口 /ops + /product + /content + /email) / mailer / pycraper /
-    │                           # pyreplay / nginx-pi（pi-web TLS 终结，upstream → 宿主 :30141）
+    │                           # 四路径入口 /ops + /product + /content + /email) / mailer /
+    │                           # nginx-pi（pi-web TLS 终结，upstream → 宿主 :30141）
     ├── skills/                 # generate-skill(:9501) / evaluate-skill(:9502) /
     │                           # search-skill(:9503)
     ├── evolve/                 # （S1–S7 逐步加入；S5 health-patrol 健康巡检 :8127 仅内部）
@@ -96,9 +96,9 @@ docker logs <svc>                               # 日志
 | 对外 | 5181 | **board 前端是唯一对外主入口**（core-ui 单容器 :5181 单入口 SPA：`/ops/` 运维中心 + `/product/` 产品与任务 + `/content/` 内容生产 + `/email/` 邮件，`/` 302 → `/ops/`，SSO 登录枢纽 `/ops/login`；nginx 同源代理 `/api/`→workflow-api:8001、`/mailer/`→mailer:8003、`/jaeger/`→jaeger:16686） |
 | 对外 | 8008 | auth（浏览器 web3auth SDK 跨源直连，auth 侧已开 CORS） |
 | 对外 | 8443 | pi-web（**HTTPS**，nginx-pi TLS 终结；证书 = token 节点 DigiCert DV `xiaobai.asyou.me`/`www.xiaobai.asyou.me`，bind mount 自 `/srv/token_node0/token_chain_data/ssl/`，到期 2026-10-26，续期替换文件即可；访问 `https://xiaobai.asyou.me:8443/`；PI_WEB_PASSWORD Basic Auth 纵深防御，用户名固定 `pi`；⚠️ nginx 的 Host 头必须用 `$http_host` 保留端口，否则 pi-web 同源自检 403；upstream → 宿主 pi-web :30141（systemd 用户单元 `pi-web.service`）；偏离 S0 端口最小化的例外） |
-| 127.0.0.1 | 8001 / 8003 / 3306 / 7233 / 5432 / 9500 | api / mailer / mysql / temporal / temporal-pg / pyreplay |
+| 127.0.0.1 | 8001 / 8003 / 3306 / 7233 / 5432 | api / mailer / mysql / temporal / temporal-pg |
 | 127.0.0.1 | 8233 / 6333 / 6334 / 4007 | temporal-ui / qdrant（UI + gRPC） / postiz（第三方，调试用） |
-| 仅内部网络 | 4317 / 4318 / 16686 / 9501–9504 / 8008 | otel / jaeger / 三技能 / pycraper x-scan 端点（9504） / synapse（8008 容器内网；宿主 8008 已让给 auth 容器发布；S4 Matrix 审批 Bot `matrix-bot` :8126 健康探针同属内部网络） |
+| 仅内部网络 | 4317 / 4318 / 16686 / 9501–9503 / 8008 | otel / jaeger / 三技能 / synapse（8008 容器内网；宿主 8008 已让给 auth 容器发布；S4 Matrix 审批 Bot `matrix-bot` :8126 健康探针同属内部网络） |
 | 仅内部网络 | 8127 | S5 健康巡检 `health-patrol` 健康探针（不发布宿主端口） |
 
 ## 数据（named volume，两侧共享，切换部署方式不丢数据）

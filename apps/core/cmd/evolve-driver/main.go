@@ -70,7 +70,8 @@ type Config struct {
 
 	// 陈旧单回收：运行态（coding/reviewing/sandboxing/testing）超过该秒数未更新 → 重置 open 重跑
 	//（进程中途死亡：重启/OOM。approving 不回收——人工审批合法长时，过期由 api TickExpiry 驱动）。
-	StaleSec int `env:"EVOLVE_TASK_STALE_SEC" envDefault:"7200"`
+	// 8h：必须大于 coder 的 6h 硬上限，否则长任务跑到 2h 就被回收重跑（2026-11-27 #10）。
+	StaleSec int `env:"EVOLVE_TASK_STALE_SEC" envDefault:"28800"`
 
 	// worktree 兜底清理：独立 ticker 每 CleanScanSec 秒（默认 1800 = 30 分钟）扫一次
 	// cache/evolve/，对「分支已合并进 main 且非进行中且无未提交改动」的目录执行清理

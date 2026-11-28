@@ -17,11 +17,11 @@ import (
 type PiEnv struct {
 	WebURL     string // PI_WEB_URL（默认 http://pi-web:30141）
 	Password   string // PI_WEB_PASSWORD（Basic Auth，用户名固定 pi）
-	TimeoutSec int    // PI_TIMEOUT_SEC（默认 7200）：整轮硬上限
+	TimeoutSec int    // PI_TIMEOUT_SEC（默认 21600 = 6h）：整轮硬上限
 	StallSec   int    // PI_STALL_SEC（默认 3600）：会话文件持续不增长 → 判定 agent 静默死亡
 	PollSec    int    // PI_POLL_SEC（默认 5）
 	// ReadOnlyNudgeCalls 只读催促阈值（默认 60）：工具调用达到该数量且 worktree 零改动 →
-	// 发一条 followUp 催促立即落代码（不改状态、不打断 agent）。0 关闭。
+	// 发一条 steer 立即打断只读空转并要求落代码（0 关闭）。
 	ReadOnlyNudgeCalls int
 	Provider           string // PI_PROVIDER（必填）
 	Model              string // PI_MODEL（必填）
@@ -34,7 +34,7 @@ func LoadPiEnv() PiEnv {
 	return PiEnv{
 		WebURL:             envOr("PI_WEB_URL", "http://pi-web:30141"),
 		Password:           os.Getenv("PI_WEB_PASSWORD"),
-		TimeoutSec:         envInt("PI_TIMEOUT_SEC", 7200),
+		TimeoutSec:         envInt("PI_TIMEOUT_SEC", 21600),
 		StallSec:           envInt("PI_STALL_SEC", 3600),
 		PollSec:            envInt("PI_POLL_SEC", 5),
 		ReadOnlyNudgeCalls: envInt("PI_READONLY_NUDGE_CALLS", 60),
@@ -269,8 +269,8 @@ func (p *protoIO) submit(ctx context.Context, client *piWeb, env PiEnv, input Fi
 //     让 driver 取消/重跑，而不是干等。
 //     取 1 小时而非 30 分钟：本地模型（Qwen3.8-27B @ llama.cpp）冷启动/大上下文预填
 //     阶段只算不输出，会话文件长时间不增长，阈值太短会误杀正常推理（2026-10-29）。
-//   - 只读催促：工具调用已达 ReadOnlyNudgeCalls 且 worktree 零改动 → 发 followUp
-//     催促立即落代码（不打断 agent，只排队一条消息）。
+//   - 只读催促：工具调用已达 ReadOnlyNudgeCalls 且 worktree 零改动 → 发 steer
+//     立即打断只读空转并要求落代码（followUp 会排队到本轮结束，agent 可能继续空转数十分钟）。
 func (p *protoIO) waitForAgent(ctx context.Context, env PiEnv, client *piWeb, sessionID, workdir string) error {
 	pollSec := env.PollSec
 	if pollSec < 1 {
@@ -309,11 +309,12 @@ func (p *protoIO) waitForAgent(ctx context.Context, env PiEnv, client *piWeb, se
 			continue
 		}
 		size := fileSize(file)
+		terminal := LastMessageTerminal(file)
 		if size != lastSize {
 			lastSize = size
 			lastProgress = time.Now()
 			stable = 0
-		} else if LastMessageTerminal(file) && size > 0 {
+		} else if terminal && size > 0 {
 			stable++
 			if stable >= piStablePolls {
 				p.logf("agent finished (session=%s, last=assistant no toolCall, size stable %dB for %ds)",
@@ -325,27 +326,29 @@ func (p *protoIO) waitForAgent(ctx context.Context, env PiEnv, client *piWeb, se
 		}
 
 		// 只读催促：每 6 个轮询（30s）才解析一次会话，避免大会话文件被频繁扫描。
+		// agent 已产出终结回复（正在稳定判定中）时不再催：steer 会滞留到下一轮，
+		// 下一轮一开始就收到「停止探索」反而误伤。
 		tick++
-		if client != nil && env.ReadOnlyNudgeCalls > 0 && tick%6 == 0 && nudges < piReadOnlyNudges {
+		if client != nil && !terminal && env.ReadOnlyNudgeCalls > 0 && tick%6 == 0 && nudges < piReadOnlyNudges {
 			calls, writes := countToolCalls(file)
 			if calls >= nudgeAt && writes == 0 && !HasChanges(workdir) {
 				nudges++
 				nudgeAt += env.ReadOnlyNudgeCalls
 				// 去重：上一条催促还在 pi-web 队列里未消费（agent 慢，催促堆积）→ 跳过本次。
-				// 否则同一条「只读不写」催促会在会话里排队 N 份，LLM 恢复后被重复提示刷屏
+				// 否则同一条「只读不写」催促会堆积 N 份，LLM 恢复后被重复提示刷屏
 				//（2026-11-11 实测：62 次调用后连续多条同文案 followUp）。
-				// 优先查 pi-web 真实队列（get_state.queuedMessages.followUp，含正在处理中的那条）；
-				// 查询失败回退会话文件比对（只能覆盖「最后一条是催促且未消费」的情形）。
+				// 优先查 pi-web 真实队列（get_state.queuedMessages.{steering,followUp}，
+				// 含正在处理中的那条）；查询失败回退会话文件比对（只能覆盖「最后一条是催促且未消费」）。
 				if p.lastUserMessage(env.SessionDir, sessionID) == readOnlyNudgeMessage(calls) {
 					p.logf("read-only nudge already queued (session=%s), skipping", sessionID)
 					continue
 				}
-				if client.queueFollowUpCount(ctx, sessionID) > 0 {
-					p.logf("followUp queue not drained (session=%s), skipping nudge", sessionID)
+				if client.queuePendingCount(ctx, sessionID) > 0 {
+					p.logf("pending queue not drained (session=%s), skipping nudge", sessionID)
 					continue
 				}
-				p.logf("read-only spiral: %d tool calls, 0 writes → nudging agent (session=%s)", calls, sessionID)
-				body, err := client.sendFollowUp(ctx, sessionID, readOnlyNudgeMessage(calls))
+				p.logf("read-only spiral: %d tool calls, 0 writes → steering agent (session=%s)", calls, sessionID)
+				body, err := client.sendSteer(ctx, sessionID, readOnlyNudgeMessage(calls))
 				if err != nil {
 					p.logf("nudge failed: %v", err)
 				} else {

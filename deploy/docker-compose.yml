@@ -32,8 +32,6 @@ include:
   # 共享代码 core-ui/src/kit，nginx 配置 core-ui.conf / board.conf）
   - compose/core/core-ui.yml
   - compose/core/mailer.yml
-  - compose/core/pycraper.yml
-  - compose/core/pyreplay.yml
   # 小红书 MCP server（apps/social 源码构建；:18060 仅内部网络，登录态 ./data 持久卷）
   - compose/core/social.yml
   # 淘宝/闲鱼 MCP server（apps/social/ali-mcp 源码构建；:18070 仅内部网络，登录态 ./ali-mcp-data 持久卷）

@@ -8,7 +8,23 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wetee/ai-workflow/internal/db"
 )
+
+// TestAgentTimeoutDefault 锁定外层 agent 硬超时兜底 6h（必须与 PI_TIMEOUT_SEC 默认一致，
+// 否则外层会先于 adapter 内层硬超时杀掉进程；2026-11-27 #10 实测 2h 误杀）。
+func TestAgentTimeoutDefault(t *testing.T) {
+	if defaultAgentTimeout != 6*time.Hour {
+		t.Fatalf("defaultAgentTimeout = %s, want 6h", defaultAgentTimeout)
+	}
+	if got := agentTimeout(&db.AgentRegistry{}); got != 6*time.Hour {
+		t.Fatalf("agentTimeout(空 limits) = %s, want 6h", got)
+	}
+	if got := agentTimeout(&db.AgentRegistry{Limits: `{"timeout_sec":21600}`}); got != 6*time.Hour {
+		t.Fatalf("agentTimeout(limits=21600) = %s, want 6h", got)
+	}
+}
 
 // TestGithubOwnerRepo 锁定 PR 链接所需的 owner/repo 解析。
 func TestGithubOwnerRepo(t *testing.T) {

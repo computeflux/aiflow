@@ -92,7 +92,7 @@ func TestLastUserMessage(t *testing.T) {
 }
 
 // TestLoadPiEnvTimeouts 超时默认值回归：
-//   - PI_TIMEOUT_SEC = 7200（整轮硬上限 2 小时）
+//   - PI_TIMEOUT_SEC = 21600（整轮硬上限 6 小时）
 //   - PI_STALL_SEC   = 3600（无进展 1 小时才判停滞）
 //
 // 停滞阈值取 1 小时而非 30 分钟：本地模型冷启动/大上下文预填阶段只算不输出，
@@ -101,8 +101,8 @@ func TestLoadPiEnvTimeouts(t *testing.T) {
 	t.Setenv("PI_TIMEOUT_SEC", "")
 	t.Setenv("PI_STALL_SEC", "")
 	env := LoadPiEnv()
-	if env.TimeoutSec != 7200 {
-		t.Errorf("TimeoutSec 默认应为 7200，得到 %d", env.TimeoutSec)
+	if env.TimeoutSec != 21600 {
+		t.Errorf("TimeoutSec 默认应为 21600（6h），得到 %d", env.TimeoutSec)
 	}
 	if env.StallSec != 3600 {
 		t.Errorf("StallSec 默认应为 3600（1 小时），得到 %d", env.StallSec)
