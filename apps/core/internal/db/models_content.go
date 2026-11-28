@@ -184,7 +184,7 @@ type XAccount struct {
 // board 的“错误日志”页可以查看、筛选并标记处理。
 type ErrorLog struct {
 	ID         uint       `gorm:"primaryKey" json:"id"`
-	System     string     `gorm:"size:64;index;not null" json:"system"`     // api / go-worker / pycraper / pyreplay
+	System     string     `gorm:"size:64;index;not null" json:"system"`     // api / go-worker / social
 	Level      string     `gorm:"size:16;index;default:error" json:"level"` // error / warning / fatal
 	Source     string     `gorm:"size:128;index" json:"source"`             // activity 名 / 路由 / 平台名
 	WorkflowID string     `gorm:"size:255;index" json:"workflow_id"`        // Temporal workflow id

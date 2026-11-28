@@ -240,7 +240,7 @@ func (s *Scanner) externalAppDirs(project *Project) []string {
 		}
 		name := e.Name()
 		if project.Services[name] != nil {
-			continue // 已在 compose 内（board / pi-web / pycraper / pyreplay / mailer / auth）
+			continue // 已在 compose 内（board / pi-web / social / mailer / auth）
 		}
 		out = append(out, filepath.Join("apps", name))
 	}
@@ -267,7 +267,7 @@ func composeKind(svc *Service, root string) string {
 	case "deploy/Dockerfile.ci":
 		return "cli"
 	}
-	// 上下文目录语言（apps/pycraper → python；apps/mailer → go）
+	// 上下文目录语言（pyproject.toml → python；go.mod → go）
 	ctxDir := resolveContext(root, filepath.Dir(svc.File), svc.Build.Context)
 	if fileExists(filepath.Join(ctxDir, "pyproject.toml")) {
 		return "python-worker"
@@ -365,7 +365,7 @@ func (s *Scanner) owner(name string, _ map[string]string) string {
 }
 
 // skillInterfaces 已注册技能 → 资产名映射（skills 表，S5 §3.1 对外接口维度）。
-// 映射：skill.container（如 pyreplay / pycraper）或 skill.name 本身（generate / evaluate / search）。
+// 映射：skill.container（如 social）或 skill.name 本身（generate / evaluate / search）。
 type interfaceItem struct {
 	Type     string `json:"type"`
 	Name     string `json:"name"`

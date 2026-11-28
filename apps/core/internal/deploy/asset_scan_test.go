@@ -20,16 +20,13 @@ func TestScanRepo(t *testing.T) {
 
 	// 关键资产存在（contract-deploy / pi-web 等嵌套独立 git 仓库被 .gitignore 忽略，
 	// 不在 git worktree 里，CI 环境无法断言其存在；board 前端已合并为 core-ui 单容器四路径入口）
-	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "pycraper", "pyreplay", "mailer", "generate-skill", "temporal", "health-patrol", "deployctl", "minishop", "postiz"} {
+	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "mailer", "generate-skill", "temporal", "health-patrol", "deployctl", "minishop", "postiz"} {
 		if byName[name] == (SoftwareAsset{}) {
 			t.Fatalf("missing asset %q", name)
 		}
 	}
 
 	// 类型判定
-	if byName["pycraper"].Kind != "python-worker" {
-		t.Fatalf("pycraper kind = %q", byName["pycraper"].Kind)
-	}
 	if byName["workflow-api"].Kind != "go-service" {
 		t.Fatalf("workflow-api kind = %q", byName["workflow-api"].Kind)
 	}
@@ -45,7 +42,7 @@ func TestScanRepo(t *testing.T) {
 
 	// 纳管判定（红线；目录不存在时跳过——嵌套仓库在 worktree 中缺失）
 	// 注：pi-web 跑在宿主（systemd 用户单元，非 compose），属不纳管清单，与 contract-deploy 等同类。
-	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "pycraper", "pyreplay", "mailer", "temporal", "health-patrol"} {
+	for _, name := range []string{"workflow-api", "workflow-go-worker", "core-ui", "mailer", "temporal", "health-patrol"} {
 		a := byName[name]
 		if a == (SoftwareAsset{}) {
 			continue // 目录不存在时跳过

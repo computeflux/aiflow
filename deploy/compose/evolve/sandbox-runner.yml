@@ -21,7 +21,7 @@ services:
     networks: [workflow-net]
     volumes:
       - ../../../.env:/app/.env:ro
-      # 宿主 docker socket（ro）：白名单镜像（pycraper/pyreplay:latest）是宿主本地镜像，
+      # 宿主 docker socket（ro）：白名单镜像（如 social:latest）是宿主本地镜像，
       # dind 独立镜像库看不到它们，故默认走宿主 daemon（隔离性来自写死的安全参数）。
       # 若改用 registry 镜像，可切回 SANDBOX_DOCKER_HOST=tcp://sandbox-dind:2375。
       - /run/docker.sock:/run/docker.sock:ro

@@ -243,7 +243,9 @@ func (p *protoIO) waitForAnalyst(ctx context.Context, env PiEnv, client *piWeb, 
 				nudges++
 				p.logf("analyst: %d tool calls → forcing final answer (nudge %d/%d, session=%s)",
 					calls, nudges, maxNudges, sessionID)
-				if _, err := client.sendFollowUp(ctx, sessionID, analystStopNudge); err != nil {
+				// steer（不是 followUp）：立即打断当前探索；followUp 会排队到本轮结束，
+				// 而本轮可能永远不结束（模型继续只读），收尾指令永远到不了。
+				if _, err := client.sendSteer(ctx, sessionID, analystStopNudge); err != nil {
 					p.logf("analyst: stop nudge failed: %v", err)
 				}
 			}

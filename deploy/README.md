@@ -30,8 +30,8 @@ deploy/
     ├── infra/                  # temporal 栈（pg/server/ui）/ mysql / qdrant / postiz /
     │                           # otel-collector / jaeger / synapse
     ├── core/                   # auth / workflow-api / workflow-go-worker / core-ui(:5181 单容器单入口 SPA
-    │                           # 四路径入口 /ops + /product + /content + /email) / mailer / pycraper /
-    │                           # pyreplay / nginx-pi（pi-web TLS 终结，upstream → 宿主 :30141）
+    │                           # 四路径入口 /ops + /product + /content + /email) / mailer /
+    │                           # nginx-pi（pi-web TLS 终结，upstream → 宿主 :30141）
     ├── skills/                 # generate-skill(:9501) / evaluate-skill(:9502) /
     │                           # search-skill(:9503)
     ├── evolve/                 # （S1–S7 逐步加入；S5 health-patrol 健康巡检 :8127 仅内部）

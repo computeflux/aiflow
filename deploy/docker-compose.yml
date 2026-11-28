@@ -32,6 +32,7 @@ include:
   # 共享代码 core-ui/src/kit，nginx 配置 core-ui.conf / board.conf）
   - compose/core/core-ui.yml
   - compose/core/mailer.yml
+  # 旧实现回滚路径（MIG-1）：服务挂 profiles: [legacy]，全量 up 不启动
   - compose/core/pycraper.yml
   - compose/core/pyreplay.yml
   # 小红书 MCP server（apps/social 源码构建；:18060 仅内部网络，登录态 ./data 持久卷）

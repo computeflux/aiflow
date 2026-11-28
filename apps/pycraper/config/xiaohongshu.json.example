@@ -1,6 +1,0 @@
-{
-  "_comment": "小红书 MCP 配置模板（MK-00 已定案 server = xpzouying/xiaohongshu-mcp，HTTP streamableHttp :18060/mcp）。复制为 xiaohongshu.json 后填写。mcp_command 留空=未配置（fetch 静默返回空 / publish 显式抛错）；启用时填 stdio↔HTTP 桥命令，如 npx -y mcp-remote http://<mcp-host>:18060/mcp。工具名固定 search_feeds/publish_content（真实 server 工具名，非 search_notes/publish_note）。",
-  "mcp_command": "",
-  "fetch_tool": "search_feeds",
-  "publish_tool": "publish_content"
-}

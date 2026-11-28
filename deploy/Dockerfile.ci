@@ -15,8 +15,8 @@ WORKDIR /ci
 COPY apps/core/go.mod apps/core/go.sum ./
 RUN go mod download
 # python + uv（uv run --no-sync pytest）+ pytest（系统解释器兜底：worktree 无 .venv 时
-# ci-runner.sh 用 `python3 -m pytest` 跑 apps/* 的 pytest 用例；pycraper/pyreplay 的
-# 单测自带第三方依赖 stub，离线可收集可执行；没 pytest 就只能对“有测试却无环境”报失败）
+# ci-runner.sh 用 `python3 -m pytest` 跑 apps/* 的 pytest 用例；Python 项目单测自带
+# 第三方依赖 stub，离线可收集可执行；没 pytest 就只能对“有测试却无环境”报失败）
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pytest python3-pydantic \
     && rm -rf /var/lib/apt/lists/* \
     && curl -LsSf https://astral.sh/uv/install.sh | sh

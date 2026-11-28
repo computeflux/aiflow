@@ -6,7 +6,7 @@
   "entrypoint": "/bin/agent-pi",
   "container": "pi-web",
   "workdir_prefix": "/home/wetee/work/cathome/workflow",
-  "limits": { "timeout_sec": 7200, "max_files_per_turn": 50 },
+  "limits": { "timeout_sec": 21600, "max_files_per_turn": 50 },
   "permissions": { "write_scope": "worktree:apps/*" },
   "config": { "session_dir": "/home/wetee/.pi/agent" }
 }

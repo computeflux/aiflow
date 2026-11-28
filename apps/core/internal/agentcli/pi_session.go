@@ -243,9 +243,10 @@ func (c *piWeb) get(ctx context.Context, path string) (string, error) {
 	return string(body), nil
 }
 
-// queueFollowUpCount 查 pi-web 会话的 followUp 排队消息数（GET /api/agent/:id →
-// data.queuedMessages.followUp）。任何失败返回 -1（调用方按「无队列」处理，催促照发）。
-func (c *piWeb) queueFollowUpCount(ctx context.Context, sessionID string) int {
+// queuePendingCount 查 pi-web 会话待消费的消息数（GET /api/agent/:id →
+// data.queuedMessages.{steering,followUp}）。steer 消息在 agent 消费前也可能留在队列里，
+// 只读催办去重必须同时看两类队列。任何失败返回 -1（调用方按「无队列」处理，催促照发）。
+func (c *piWeb) queuePendingCount(ctx context.Context, sessionID string) int {
 	body, err := c.get(ctx, "/api/agent/"+url.PathEscape(sessionID))
 	if err != nil {
 		return -1
@@ -254,6 +255,7 @@ func (c *piWeb) queueFollowUpCount(ctx context.Context, sessionID string) int {
 		Success bool `json:"success"`
 		Data    struct {
 			QueuedMessages struct {
+				Steering []string `json:"steering"`
 				FollowUp []string `json:"followUp"`
 			} `json:"queuedMessages"`
 		} `json:"data"`
@@ -261,7 +263,7 @@ func (c *piWeb) queueFollowUpCount(ctx context.Context, sessionID string) int {
 	if json.Unmarshal([]byte(body), &resp) != nil || !resp.Success {
 		return -1
 	}
-	return len(resp.Data.QueuedMessages.FollowUp)
+	return len(resp.Data.QueuedMessages.Steering) + len(resp.Data.QueuedMessages.FollowUp)
 }
 
 // sendFollowUp 向已有会话追加消息（排队，不拒绝）。
@@ -270,6 +272,18 @@ func (c *piWeb) sendFollowUp(ctx context.Context, sessionID, message string) (st
 		"type":              "prompt",
 		"message":           message,
 		"streamingBehavior": "followUp",
+	})
+}
+
+// sendSteer 向**正在运行**的会话注入引导消息：pi-web RPC prompt + streamingBehavior=steer，
+// 由 AgentSession.prompt 原子决定「引导当前轮」还是「空闲时另起一轮」（直接 type=steer
+// 可能在 agent 刚好结束时滞留在空闲队列）。followUp 会排队到本轮结束才消费——只读空转时
+// agent 可能继续空转数十分钟，催办永远到不了。用于「只读不写」催办 / analyst 强制收尾。
+func (c *piWeb) sendSteer(ctx context.Context, sessionID, message string) (string, error) {
+	return c.post(ctx, "/api/agent/"+url.PathEscape(sessionID), map[string]any{
+		"type":              "prompt",
+		"message":           message,
+		"streamingBehavior": "steer",
 	})
 }
 
