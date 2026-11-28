@@ -220,7 +220,7 @@ func main() {
 	registerDocsRoutes(r, docsStore, llmClient, database, requireAuth())
 
 	// ---- Skill 网关 + Agent /runs/* + 干预舱 + 审批/灰度 ticker（server.go，行为无变更）----
-	registerSkillGatewayRoutes(r, deps, brk, requireAuth)
+	registerSkillGatewayRoutes(r, deps, brk, requireAuth, requireRole)
 
 	// ---- 内容生产域（MCP→RAG→发布主链路：生成/社交/X/检索/采集/发布审批/状态总览）----
 	registerContentRoutes(r, deps, requireAuth, requireRole)

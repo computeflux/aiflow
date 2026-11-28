@@ -21,6 +21,7 @@ import (
 	"github.com/wetee/ai-workflow/internal/approval"
 	"github.com/wetee/ai-workflow/internal/db"
 	"github.com/wetee/ai-workflow/internal/llm"
+	"github.com/wetee/ai-workflow/internal/migration"
 	"github.com/wetee/ai-workflow/internal/notify"
 	"github.com/wetee/ai-workflow/internal/workitem"
 	"gorm.io/driver/mysql"
@@ -55,8 +56,11 @@ type Config struct {
 	OpenAIAPIKey  string `env:"OPENAI_API_KEY" envDefault:""`
 	OpenAIBaseURL string `env:"OPENAI_BASE_URL" envDefault:""`
 	LLMModel      string `env:"LLM_MODEL" envDefault:""`
+	HealthPort    string `env:"AUDIT_HEALTH_PORT" envDefault:"8120"`
 
-	HealthPort string `env:"AUDIT_HEALTH_PORT" envDefault:"8120"`
+	// M4-1 会话保活（工作项 wi-1795489658-2d59）：账号池心跳巡检间隔（秒）。
+	// 0 = 关闭（账号池还没接进审计时的降级开关；缺省 10 分钟一轮）。
+	KeepAliveIntervalSec int `env:"KEEPALIVE_INTERVAL_SEC" envDefault:"600"`
 }
 
 type finding struct {
@@ -148,12 +152,65 @@ func main() {
 		}
 	}
 
+	// M4-1 会话保活：独立 ticker（比审计巡检更密），检测渠道登录态掉线 → need_login + 告警。
+	if cfg.KeepAliveIntervalSec > 0 {
+		ka, err := newKeepAlive(cfg, database, store, nt)
+		if err != nil {
+			log.Printf("WARN: 会话保活未启用: %v", err)
+		} else {
+			go func() {
+				tick := func() {
+					res, err := ka.Run(context.Background())
+					if err != nil {
+						log.Printf("WARN: keepalive tick: %v", err)
+						return
+					}
+					if res.Dropped > 0 || len(res.Skipped) > 0 {
+						log.Printf("keepalive: checked=%d dropped=%d alerted=%d skipped_channels=%v",
+							res.Checked, res.Dropped, res.Alerted, res.Skipped)
+					}
+				}
+				tick()
+				kt := time.NewTicker(time.Duration(cfg.KeepAliveIntervalSec) * time.Second)
+				for range kt.C {
+					tick()
+				}
+			}()
+			log.Printf("keepalive started: interval=%ds", cfg.KeepAliveIntervalSec)
+		}
+	}
+
 	// 启动即跑一轮（部署后无需等 30 分钟），之后按 interval 循环
 	run()
 	ticker := time.NewTicker(time.Duration(cfg.IntervalSec) * time.Second)
 	for range ticker.C {
 		run()
 	}
+}
+
+// newKeepAlive 装配 M4-1 的会话保活巡检器（工作项 wi-1795489658-2d59）。
+//
+// 判据来源是 social 账号池（social_accounts）的「最近一次成功登录时间」：登录回报链
+// （apps/social 的 loginreport / pyreplay 的 AccountManagerReporter）每次都写 last_login_at，
+// 所以「心跳」不需要额外的探针 —— 超过 KEEPALIVE_STALE_SEC 没有成功登录 = 会话已失效。
+// 表缺失（social 还没上线）时建表并返回零结果，让「还没数据」是可见的零而不是报错。
+func newKeepAlive(cfg *Config, database *db.DB, store *approval.Store, nt notify.Notifier) (*migration.KeepAlive, error) {
+	if err := migration.EnsureSocialAccountTables(database.DB); err != nil {
+		return nil, fmt.Errorf("ensure social_accounts: %w", err)
+	}
+	mcfg, err := migration.LoadEnvConfig()
+	if err != nil {
+		return nil, err
+	}
+	return migration.NewKeepAlive(
+		store,
+		migration.ListSocialAccounts(database.DB),
+		migration.DropSocialAccountNeedLogin(database.DB),
+		func(ctx context.Context, title, body, level string) error {
+			return nt.SendAlert(ctx, notify.Alert{Title: title, Body: body, Level: level})
+		},
+		mcfg.KeepAliveConfig(),
+	), nil
 }
 
 func openDB(cfg *Config) (*db.DB, error) {

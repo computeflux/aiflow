@@ -29,7 +29,63 @@ const (
 	grayStage100 = 100
 )
 
+// cutoverTargetVersions 取「正在被 M4-1 切流」的版本坐标集合（skill_name + version）。
+//
+// 只取「活跃」的切流（status ∈ db.CutoverStatusActive = pending / running）：收尾之后切流
+// 状态机不再动这些行，S1 的灰度推进与灰度回滚必须照常接管（见 TickGray 注释）。
+//
+// ⚠️ rolled_back 同样是终态、同样不让路，不能写成 `status <> 'completed'`：Rollback 只把
+// 切流行改成 rolled_back，**不清 target_version**（cutover.go 的 Rollback），于是
+// 「切流回滚 → 同一版本号再走普通灰度（cd.startGrayRelease 复用已存在的 (skill_id, version)
+// 行，deployctl 同理）」会让这条陈旧记录永久命中 {skill_name, target_version}，把该 gray 行
+// 永久冻结在 5%%：不升档、恶化不回滚、也不告警 —— 正是本函数注释点名要避免的形态。
+// 回滚时目标版本行已被置 retired/traffic_split=0，该切流不可能再产生该版本的 gray 行；
+// 真要重新放量走 CutoverService.Stage，它在写流量之前就把 status 写成 running，届时照旧让路。
+func (s *Store) cutoverTargetVersions(ctx context.Context) (map[string]bool, error) {
+	// 表可能还不存在（M4-1 的 skill_cutover 由 API 启动时的 EnsureSchema / bootstrap.sh 建，
+	// 与本状态机的 ticker 不在同一条启动路径上）：没有切流记录 = 没有任何 gray 行需要让路，
+	// 绝不能让整个灰度 tick 失败（那会连带停掉 S1 自己的灰度推进与恶化回滚）。
+	if !s.db.Migrator().HasTable(&db.SkillCutover{}) {
+		return map[string]bool{}, nil
+	}
+	var rows []db.SkillCutover
+	if err := s.db.WithContext(ctx).
+		Where("target_version <> ? AND status IN ?", "", db.CutoverStatusActive).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list skill_cutover: %w", err)
+	}
+	set := make(map[string]bool, len(rows)*2)
+	for _, r := range rows {
+		set[skillVersionKey(r.SkillName, r.TargetVer)] = true
+	}
+	return set, nil
+}
+
+func skillVersionKey(skillName, version string) string { return skillName + "\x00" + version }
+
 // TickGray 扫所有 status='gray' 的版本，推进或回滚。返回处理（变更）的版本数。
+//
+// ⚠️ 必须跳过「M4-1 切流」的 gray 版本（approval_id IS NULL）—— S1 灰度与 M4-1 切流共用
+// skill_versions.status='gray'，而两边的档位语义完全不同：
+//   - S1 灰度：5 → 50 → 100，由本状态机按窗口健康度自动推进（cd.go 建行时写 approval_id）；
+//   - M4-1 切流：10 → 50 → 100，每一档都要人工确认 + 质量护栏（migration.CutoverService）。
+//
+// 不隔离的后果（同一进程里 1 分钟 ticker 就会踩到）：切流版本把 gray_stage=10 写进行上，
+// advanceGray 的 switch 只认 5/50，10 落到 default（语义是「100% 窗口健康 → 完成」）→
+// 该版本被直接置 live、基线被置 retired/0，而 skills.addr 还指向旧实现、skill_cutover 仍记着
+// 10%：线上真实流量已 100% 打到新实现，人工放量护栏（观察间隔 + 一致率/成功率）被整体绕过。
+// gray_stage=50 会被推到 100；窗口判定为恶化时还会走 rollbackGray（清流量 + 恢复另一 live +
+// 强制开熔断 + 建 intervention），而 skill_cutover 的状态完全不知道发生了这一切。
+//
+// 判据 = 「skill_cutover 里有一个未收尾的切流，其目标版本正是这一行」。
+// 绝不能用 approval_id IS NULL：那条判据会把所有「不是 cd.startGray 建的」gray 行一起冻结，
+// 例如 deployctl version up <skill> <ver> --env gray（internal/deploy/version.go 写
+// status=gray + traffic_split=5，不写 approval_id）—— 这类灰度此前由本状态机按 5→50→100
+// 自动推进、恶化时自动回滚，被 continue 掉之后会永久停在 5%%，既不升档也不回滚也不告警。
+//
+// 只看活跃的切流（status ∈ db.CutoverStatusActive）：收尾之后切流状态机不再动这些行，S1 的
+// 推进/回滚必须重新接管，否则收尾后出现「无审批单的 gray + 100%%」行会永远卡着没人管；
+// 回滚（rolled_back）也一样要重新接管，理由见 cutoverTargetVersions 注释里的冻结路径。
 func (s *Store) TickGray(ctx context.Context) (int, error) {
 	var versions []db.SkillVersion
 	if err := s.db.WithContext(ctx).
@@ -37,10 +93,17 @@ func (s *Store) TickGray(ctx context.Context) (int, error) {
 		Find(&versions).Error; err != nil {
 		return 0, fmt.Errorf("list gray versions: %w", err)
 	}
+	cutover, err := s.cutoverTargetVersions(ctx)
+	if err != nil {
+		return 0, err
+	}
 
 	changed := 0
 	for i := range versions {
 		v := &versions[i]
+		if cutover[skillVersionKey(s.skillNameOf(ctx, v), v.Version)] {
+			continue // 归 M4-1 切流状态机管（见函数注释）
+		}
 		if err := s.tickGrayOne(ctx, v); err != nil {
 			// 单个版本失败不阻塞其它版本；状态已持久化，下轮重试
 			log.Printf("WARN: gray tick skill=%s v%s: %v", v.Version, v.Version, err)
@@ -49,6 +112,15 @@ func (s *Store) TickGray(ctx context.Context) (int, error) {
 		changed++
 	}
 	return changed, nil
+}
+
+// skillNameOf 取版本行所属的 skill 名（TickGray 的归属判定用；查不到返回空串 = 不匹配任何切流）。
+func (s *Store) skillNameOf(ctx context.Context, v *db.SkillVersion) string {
+	var skill db.Skill
+	if err := s.db.WithContext(ctx).Select("name").Where("id = ?", v.SkillID).First(&skill).Error; err != nil {
+		return ""
+	}
+	return skill.Name
 }
 
 func (s *Store) tickGrayOne(ctx context.Context, v *db.SkillVersion) error {

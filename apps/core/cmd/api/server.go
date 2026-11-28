@@ -19,6 +19,7 @@ import (
 	"github.com/wetee/ai-workflow/internal/deploy"
 	"github.com/wetee/ai-workflow/internal/dockerapi"
 	"github.com/wetee/ai-workflow/internal/intervention"
+	"github.com/wetee/ai-workflow/internal/migration"
 	"github.com/wetee/ai-workflow/internal/notify"
 	"github.com/wetee/ai-workflow/internal/skillgateway"
 )
@@ -30,6 +31,7 @@ func registerSkillGatewayRoutes(
 	deps *appDeps,
 	brk *circuitbreaker.Registry,
 	requireAuth func() gin.HandlerFunc,
+	requireRole func(roles ...string) gin.HandlerFunc,
 ) {
 	database, apvStore := deps.database, deps.apvStore
 
@@ -52,6 +54,61 @@ func registerSkillGatewayRoutes(
 		log.Fatalf("ensure skill schema: %v", err)
 	}
 	skillgateway.RegisterRoutes(r.Group("/api/skills"), skillGw)
+	// M4-1（工作项 wi-1795489658-2d59）：跨服务切流 API（x-scan / like 的 addr 指向
+	// social，10%→50%→100% 逐档放量）+ 旧服务缩容下线清单。
+	//
+	// ⚠️ 角色口径与其余「改生产流量」的写端点一致（服务重启/停止/回滚 = requireRole("admin")，
+	// 见 main.go 的 serviceOps 路由组）：requireAuth() 只证明「是 board 被邀请的登录用户」，
+	// 任何普通用户都能把 like/x-scan 的流量切到新实现或回滚版本 —— 切流的每一档都要人工确认，
+	// 这个「人」必须是 admin。authVerifier 为空（未部署 apps/auth 的本地开发）时 requireRole
+	// 是直通，不影响本地直连 :8001 调试。
+	// 护栏阈值与稳定观察窗同一份 .env（CUTOVER_MIN_STAGE_SEC / CUTOVER_MIN_SAMPLES /
+	// CUTOVER_PARITY_MIN / CUTOVER_SUCCESS_MIN / DECOMMISSION_STABLE_SEC，见 .env.example）：
+	// 必须解析在构造 CutoverService **之前** —— 阈值是构造参数，写死成 CutoverConfig{Actor:
+	// "cutover"} 就等于运维按 .env.example 把 CUTOVER_MIN_SAMPLES 调到 100、把 CUTOVER_PARITY_MIN
+	// 提到 0.99 来收紧放量门槛时，API 仍按 20 / 0.9 放行 stage（「调紧了没生效」比「没这个开关」
+	// 更危险）；而 cutoverSvc.Config() 又把这份写死的阈值喂给 skill-decommission/plan，两个端点
+	// 一起偏离环境配置。
+	// 解析失败不 fatal：LoadEnvConfig 只要任一字段类型不合法就返回 (nil, err)（它自己不会带回
+	// 缺省值），而这份 EnvConfig 是 keepalive / 切流 / 下线三个组件共用的 —— 例如误写
+	// CUTOVER_PARITY_MIN=0.9x，甚至与切流无关的 KEEPALIVE_STALE_SEC=3d。此时 envCfg == nil，
+	// 下面两个缺省必须自己补齐：阈值走 WithDefaults，观察窗直接给 24h（= NewDecommission 对
+	// <=0 的归一值，也是 DecommissionWindow 的缺省），保证「env 写错」只降级到缺省口径、
+	// API 照常起来，而不是被后面的启动自检当成「切流护栏配置非法」直接起不来。
+	envCfg, err := migration.LoadEnvConfig()
+	if err != nil {
+		log.Printf("migration env config: %v（用缺省阈值/窗口）", err)
+	}
+	cutoverCfg := migration.CutoverConfig{Actor: "cutover"}.WithDefaults()
+	stableWindow := 24 * time.Hour
+	if envCfg != nil {
+		cutoverCfg = envCfg.CutoverConfig()
+		stableWindow = envCfg.DecommissionWindow()
+	}
+	cutoverSvc := migration.NewCutover(database.DB, cutoverCfg,
+		func(ctx context.Context, title, body, level string) error {
+			return deps.notifier.SendAlert(ctx, notify.Alert{Title: title, Body: body, Level: level})
+		})
+	if err := cutoverSvc.EnsureSchema(); err != nil {
+		log.Fatalf("ensure skill_cutover schema: %v", err)
+	}
+	migration.RegisterRoutes(r, cutoverSvc,
+		migration.NewDecommission(database.DB, cutoverSvc.Config(), stableWindow), requireAuth(), requireRole("admin"))
+
+	// 切流护栏阈值与下线观察窗都来自同一份 .env（装配期自检，让「配了没生效」在启动日志里
+	// 现形）：NewCutover 的阈值是构造参数，一旦哪天改回写死 CutoverConfig{...}，.env 里的
+	// CUTOVER_* 会静默失效（护栏照旧放行），而这份 cfg 又经 cutoverSvc.Config() 喂给
+	// skill-decommission/plan —— 两个端点一起偏离环境配置，运行期没有任何信号。
+	// 阈值全部 >0 由 WithDefaults / DecommissionWindow 保证；这里再兜一层非法值（含 env 把阈值
+	// 配成负数、WithDefaults 的回落被绕过的情况），并把生效值打进启动日志：运维改完 .env 重启后
+	// 对着这一行就能确认放量护栏真的按新值在跑。
+	ctCfg := cutoverSvc.Config()
+	if ctCfg.MinStageInterval <= 0 || ctCfg.MinSamples <= 0 || ctCfg.ParityMin <= 0 ||
+		ctCfg.SuccessMin <= 0 || stableWindow <= 0 {
+		log.Fatalf("切流护栏配置非法: %+v 观察窗=%s", ctCfg, stableWindow)
+	}
+	log.Printf("M4-1: 切流护栏生效（env）观察间隔=%s 每档最少样本=%d 一致率>=%g 成功率>=%g 下线观察窗=%s",
+		ctCfg.MinStageInterval, ctCfg.MinSamples, ctCfg.ParityMin, ctCfg.SuccessMin, stableWindow)
 	// S2 §3.4：Agent 权限收口 —— /runs/*（只读查询 + Signal 白名单 approve/reject/inject + 取消）；
 	// Agent 与 agent-prod workflow 交互的唯一 HTTP 入口（无直写权限），全程 audit_logs 留痕。
 	approval.RegisterRunsRoutes(r, approval.NewRuns(deps.temporalAgent, apvStore), requireAuth())

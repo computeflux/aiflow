@@ -227,3 +227,92 @@ type Intervention struct {
 }
 
 func (Intervention) TableName() string { return "interventions" }
+
+// SocialAccount 是 social 多渠道账号池的账号行（对应表 social_accounts，由 apps/social
+// 服务建立；core 侧只读 + 会话保活降级写，见 internal/migration）。
+//
+// ⚠️ SessionRef 存的是 AES-256-GCM 密文（v1.<base64url>），json tag 用 "-"：
+// core 侧任何直接序列化本结构的响应都不会泄漏登录态；core 也绝不解密。
+type SocialAccount struct {
+	ID             int64      `gorm:"primaryKey" json:"id"`
+	Channel        string     `gorm:"size:32;uniqueIndex:uk_social_account;not null" json:"channel"`
+	AccountID      string     `gorm:"size:128;uniqueIndex:uk_social_account;not null" json:"account_id"`
+	MachineID      string     `gorm:"size:64;not null;default:''" json:"machine_id"`
+	Owner          string     `gorm:"size:64;not null;default:''" json:"owner"`
+	LoginName      string     `gorm:"size:128;not null;default:''" json:"login_name"`
+	SessionRef     string     `gorm:"type:text" json:"-"`
+	CookiesPath    string     `gorm:"size:255;not null;default:''" json:"cookies_path"`
+	Status         string     `gorm:"size:16;not null;default:active;index" json:"status"`
+	CooldownUntil  *time.Time `json:"cooldown_until"`
+	LastUsedAt     *time.Time `json:"last_used_at"`
+	UsedToday      int        `gorm:"not null;default:0" json:"used_today"`
+	DailyLimit     int        `gorm:"not null;default:0" json:"daily_limit"`
+	LastError      string     `gorm:"type:text" json:"last_error"`
+	LastLoginAt    *time.Time `json:"last_login_at"`
+	LastLoginError string     `gorm:"type:text" json:"last_login_error"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+func (SocialAccount) TableName() string { return "social_accounts" }
+
+// SocialAccount 的状态机取值（与 apps/social/internal/store 的 Account* 常量逐字一致）。
+const (
+	SocialAccountActive    = "active"
+	SocialAccountNeedLogin = "need_login"
+	SocialAccountBanned    = "banned"
+	SocialAccountCooldown  = "cooldown"
+)
+
+// skill_cutover.status 的取值（状态机定义在 internal/migration 的 CutoverService）。
+//
+// 常量放在 db 包（表所属层）而不是 migration 包：跨包读这张表的状态机（如 approval 的
+// TickGray 灰度推进）必须用同一套取值判「切流是否活跃」。一旦两侧各写各的字面量，
+// migration 侧改名/加状态时 approval 侧的守卫会静默失效，而两侧各自的单测都发现不了。
+const (
+	CutoverStatusPending    = "pending"     // 已登记目标，未放量
+	CutoverStatusRunning    = "running"     // 放量中（traffic ∈ 档位）
+	CutoverStatusCompleted  = "completed"   // 已全量并收尾（skills.addr 已收敛）
+	CutoverStatusRolledBack = "rolled_back" // 已回滚
+)
+
+// CutoverStatusActive 是「切流状态机还会动这些行」的状态集合：跨包守卫（approval 灰度推进
+// 让路、S5/S3 巡检让路）一律用它，不要各自罗列状态字面量。
+//
+// completed / rolled_back 都是终态：收尾之后切流状态机不再动这些行；回滚时目标版本行已被
+// 置 retired/traffic=0，该切流不可能再产生该版本的 gray 行（真要重新放量走
+// CutoverService.Stage，它在写流量之前就把 status 写成 running），所以两者都不该让路。
+var CutoverStatusActive = []string{CutoverStatusPending, CutoverStatusRunning}
+
+// SkillCutover 是 skill 的「跨服务切流」状态（对应表 skill_cutover，M4-1）。
+// SkillCutover 是 skill 的「跨服务切流」状态（对应表 skill_cutover，M4-1）。
+//
+// 与 skill_versions（版本灰度）分表记录的原因：切流的主体是「一个能力从旧实现迁到
+// 新实现」，新旧两版共用同一个 skill 名与同一套 schema，只有 addr 不同。把切流的
+// 档位 / 目标 addr / 判定阈值单独记一行，审计与 board 运维中心才能一眼看清「现在切到
+// 第几档、达标没有、谁批的」，而不用从多个版本行的 traffic_split 里反推意图。
+type SkillCutover struct {
+	ID         uint   `gorm:"primaryKey" json:"id"`
+	SkillName  string `gorm:"size:128;uniqueIndex;not null" json:"skill_name"`
+	TargetAddr string `gorm:"size:512;not null" json:"target_addr"`
+	// 列名必须显式钉住（不是靠 GORM 的 snake_case 推导）：字段名 TargetVer / LegacyVer 会被
+	// 推导成 target_ver / legacy_ver，而 hacks/sql/m4_1_cutover.sql 建的是 target_version /
+	// legacy_version。两条建表路径（bootstrap.sh 建表 vs 服务启动 EnsureSchema）必须产出同一张表，
+	// 否则「先跑 bootstrap 的环境」里 GORM 按 target_ver 生成 SQL → MySQL 1054 Unknown column，
+	// 切流 API 全挂；而 EnsureSchema 有 HasTable 守卫，表已存在时也不会补列，故障只在运行时暴露。
+	TargetVer   string     `gorm:"column:target_version;size:32;not null;default:''" json:"target_version"` // 切流目标版本号
+	LegacyVer   string     `gorm:"column:legacy_version;size:32;not null;default:''" json:"legacy_version"` // 被切流的旧版本号
+	Traffic     int        `gorm:"not null;default:0" json:"traffic"`                                       // 当前档位 0/10/50/100
+	Status      string     `gorm:"size:16;not null;default:pending" json:"status"`                          // pending|running|completed|rolled_back
+	StageAt     *time.Time `json:"stage_at"`                                                                // 当前档位起始时间（时长护栏）
+	CompletedAt *time.Time `json:"completed_at"`                                                            // 全量收尾时刻（下线稳定观察窗起点）
+	ParityMin   float64    `gorm:"not null;default:0" json:"parity_min"`                                    // 一致率阈值（0 = 缺省）
+	SuccessMin  float64    `gorm:"not null;default:0" json:"success_min"`                                   // 成功率阈值（0 = 缺省）
+	MinSamples  int        `gorm:"not null;default:0" json:"min_samples"`                                   // 每档最少样本（0 = 缺省）
+	Actor       string     `gorm:"size:64;not null;default:''" json:"actor"`                                // 最近一次操作者
+	Note        string     `gorm:"type:text" json:"note"`                                                   // 人读说明/原因
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+func (SkillCutover) TableName() string { return "skill_cutover" }
