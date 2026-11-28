@@ -63,6 +63,11 @@ func TestSubmitNewSession(t *testing.T) {
 	if !strings.Contains(msg, "正在为一个项目实现一个产品功能") || !strings.Contains(msg, "实现消息中心") {
 		t.Fatalf("新建会话应发完整提示词: %q", msg)
 	}
+	// 无 settings.json → full 兜底（看板链路必须显式带工具集，不能依赖默认值漂移）
+	tools, _ := body["toolNames"].([]any)
+	if len(tools) != 7 {
+		t.Fatalf("新建会话应显式带 full 工具集，得到 %v", body["toolNames"])
+	}
 }
 
 // TestSubmitFollowUp 续接会话：只发上一轮反馈（followUp 排队语义）。
@@ -82,11 +87,17 @@ func TestSubmitFollowUp(t *testing.T) {
 	if got != "S-1" {
 		t.Fatalf("续接应沿用会话 ID，得到 %q", got)
 	}
-	if len(*reqs) != 1 || !strings.HasPrefix((*reqs)[0], "POST /api/agent/S-1 ") {
-		t.Fatalf("应只调用 /api/agent/S-1: %v", *reqs)
+	if len(*reqs) != 2 ||
+		!strings.HasPrefix((*reqs)[0], "POST /api/agent/S-1 ") ||
+		!strings.HasPrefix((*reqs)[1], "POST /api/agent/S-1 ") {
+		t.Fatalf("续接应先 set_tools 再 followUp（两次 /api/agent/S-1）: %v", *reqs)
+	}
+	if !strings.Contains((*reqs)[0], `"type":"set_tools"`) ||
+		!strings.Contains((*reqs)[0], `"toolNames":["read","bash","edit","write","grep","find","ls"]`) {
+		t.Fatalf("续接前应显式对齐 full 工具集: %v", (*reqs)[0])
 	}
 	var body map[string]any
-	_ = json.Unmarshal([]byte(strings.TrimPrefix((*reqs)[0], "POST /api/agent/S-1 ")), &body)
+	_ = json.Unmarshal([]byte(strings.TrimPrefix((*reqs)[1], "POST /api/agent/S-1 ")), &body)
 	if body["streamingBehavior"] != "followUp" {
 		t.Fatalf("续接必须用 followUp（agent 在跑时排队而非拒绝）: %v", body)
 	}
@@ -145,8 +156,13 @@ func TestSubmitFollowUpProcessing(t *testing.T) {
 	if got != "S-busy" {
 		t.Fatalf("应沿用会话 ID，得到 %q", got)
 	}
-	if len(*reqs) != 1 {
-		t.Fatalf("不应回退新建会话: %v", *reqs)
+	if len(*reqs) != 2 {
+		t.Fatalf("应为 set_tools + followUp 两次请求: %v", *reqs)
+	}
+	for _, r := range *reqs {
+		if strings.Contains(r, "/api/agent/new") {
+			t.Fatalf("不应回退新建会话: %v", *reqs)
+		}
 	}
 }
 
@@ -172,11 +188,14 @@ func TestSubmitFollowUpFallback(t *testing.T) {
 	if got != "S-fallback" {
 		t.Fatalf("应回退新建会话，得到 %q", got)
 	}
-	if len(*reqs) != 2 || !strings.Contains((*reqs)[0], "/api/agent/S-stale") || !strings.Contains((*reqs)[1], "/api/agent/new") {
+	if len(*reqs) != 3 ||
+		!strings.Contains((*reqs)[0], "/api/agent/S-stale") ||
+		!strings.Contains((*reqs)[1], "/api/agent/S-stale") ||
+		!strings.Contains((*reqs)[2], "/api/agent/new") {
 		t.Fatalf("请求序列错误: %v", *reqs)
 	}
-	if !strings.Contains((*reqs)[1], "正在修复一个生产 bug") || !strings.Contains((*reqs)[1], "实现功能") {
-		t.Fatalf("回退新建应发完整提示词: %v", (*reqs)[1])
+	if !strings.Contains((*reqs)[2], "正在修复一个生产 bug") || !strings.Contains((*reqs)[2], "实现功能") {
+		t.Fatalf("回退新建应发完整提示词: %v", (*reqs)[2])
 	}
 }
 

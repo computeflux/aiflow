@@ -81,6 +81,28 @@ func TestIsPytestNoTests(t *testing.T) {
 	}
 }
 
+// TestEffectiveTaskTarget 锁定「卡上目标优先」的刷新口径（2026-11-27 卡 #10）：
+// 卡上后补勾选的目标（如 core）必须覆盖进化单建单时的旧快照 social；
+// 卡目标为空时保留任务原目标（不清空，避免中断在跑任务）。
+func TestEffectiveTaskTarget(t *testing.T) {
+	cases := []struct {
+		name, task, card, want string
+		changed                bool
+	}{
+		{"卡后补勾 core", "social", "social,core,core-ui", "social,core,core-ui", true},
+		{"卡目标归一/别名", "social", " api , social ,core", "core,social", true},
+		{"卡为空保留快照", "social", "", "social", false},
+		{"归一后一致不更新", "social,core", " social , core ", "social,core", false},
+	}
+	for _, c := range cases {
+		got, changed := effectiveTaskTarget(c.task, c.card)
+		if got != c.want || changed != c.changed {
+			t.Errorf("%s: effectiveTaskTarget(%q, %q) = (%q, %v), want (%q, %v)",
+				c.name, c.task, c.card, got, changed, c.want, c.changed)
+		}
+	}
+}
+
 // TestOutOfBoundsFiles 锁定越界判定：非 apps/* 或 apps/board* / apps/core* 都是越界
 // （core = Go 核心 / core-ui = board 前端，人工维护，只走人工 PR）；
 // 但任务显式选中的目标目录放行；路径归一化（双斜杠/./）不误报。

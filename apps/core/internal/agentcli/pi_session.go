@@ -273,15 +273,21 @@ func (c *piWeb) sendFollowUp(ctx context.Context, sessionID, message string) (st
 	})
 }
 
-// createSession 新建会话（完整提示词 + cwd + provider/model），返回 session ID。
-func (c *piWeb) createSession(ctx context.Context, cwd, message, provider, model string) (string, error) {
-	body, err := c.post(ctx, "/api/agent/new", map[string]any{
+// createSession 新建会话（完整提示词 + cwd + provider/model + 工具预设），返回 session ID。
+// toolPreset 是 pi-web 的预设名（full/default/...），由 pi-web 展开成工具数组；
+// 非空时显式生效（扩展工具仍由 pi-web 自动追加），避免默认值漂移。
+func (c *piWeb) createSession(ctx context.Context, cwd, message, provider, model, toolPreset string) (string, error) {
+	payload := map[string]any{
 		"cwd":      cwd,
 		"type":     "prompt",
 		"message":  message,
 		"provider": provider,
 		"modelId":  model,
-	})
+	}
+	if toolPreset != "" {
+		payload["toolPreset"] = toolPreset
+	}
+	body, err := c.post(ctx, "/api/agent/new", payload)
 	if err != nil {
 		return "", err
 	}
@@ -293,6 +299,33 @@ func (c *piWeb) createSession(ctx context.Context, cwd, message, provider, model
 		return "", fmt.Errorf("pi-web API returned error: %s", tail(strings.TrimSpace(body), 500))
 	}
 	return resp.SessionID, nil
+}
+
+// setTools 在已有会话上按预设名应用工具集（POST /api/agent/:id {"type":"set_tools"}）。
+// 返回生效的会话 ID：会话被重建（Chat-only 边界）时 pi-web 会返回新 ID。
+// 注意：agent 正在流式输出时 pi-web 会拒绝（Cannot change tools while the session
+// is running）——调用方按「尽力而为」处理，不要把本轮 coder 判失败。
+func (c *piWeb) setTools(ctx context.Context, sessionID, toolPreset string) (string, error) {
+	body, err := c.post(ctx, "/api/agent/"+url.PathEscape(sessionID), map[string]any{
+		"type":       "set_tools",
+		"toolPreset": toolPreset,
+	})
+	if err != nil {
+		return sessionID, err
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			SessionID string `json:"sessionId"`
+		} `json:"data"`
+	}
+	if json.Unmarshal([]byte(body), &resp) != nil || !resp.Success {
+		return sessionID, fmt.Errorf("pi-web API returned error: %s", tail(strings.TrimSpace(body), 300))
+	}
+	if resp.Data.SessionID != "" {
+		return resp.Data.SessionID, nil
+	}
+	return sessionID, nil
 }
 
 // sessionIDFromBody 解析响应里的会话 ID（success=true 且无 sessionId 的续接响应回退用 fallback）。

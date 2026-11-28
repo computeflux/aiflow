@@ -202,8 +202,18 @@ func (p *protoIO) submit(ctx context.Context, client *piWeb, env PiEnv, input Fi
 			// pi-web agent 进程 cwd 不可控（实测沿宿主仓库写盘）→ 不能盲等，必须 fail-fast。
 			return "", p.fail("feedback %q already queued in session %s (agent busy?)", tail(cont, 120), input.SessionID)
 		}
+		// 显式对齐工具集（尽力而为）：老会话可能创建于 defaultTools 之前，
+		// 或用的是旧的 default 预设；失败（如 agent 仍在收尾）不阻塞本轮。
+		toolPreset := LoadCoderToolPreset(p.stderr)
+		target := input.SessionID
+		if id, terr := client.setTools(ctx, target, toolPreset); terr != nil {
+			p.logf("set_tools failed (%v), continuing with existing tools", terr)
+		} else if id != target {
+			p.logf("set_tools recreated session %s → %s", target, id)
+			target = id
+		}
 		// streamingBehavior=followUp：agent 还在跑时消息排队（不拒绝），跑完自动处理。
-		body, err := client.sendFollowUp(ctx, input.SessionID, cont)
+		body, err := client.sendFollowUp(ctx, target, cont)
 		if err != nil {
 			p.logf("followUp request failed (%v), creating new session...", err)
 		} else {
@@ -234,7 +244,8 @@ func (p *protoIO) submit(ctx context.Context, client *piWeb, env PiEnv, input Fi
 		}
 	}
 
-	sessionID, err := client.createSession(ctx, env.hostCwd(input.Workdir), full, env.Provider, env.Model)
+	sessionID, err := client.createSession(ctx, env.hostCwd(input.Workdir), full, env.Provider, env.Model,
+		LoadCoderToolPreset(p.stderr))
 	if err != nil {
 		// 错误文本已含上下文（如 "pi-web API returned error: {...}" / 网络错误）
 		return "", p.fail("%s", tail(err.Error(), 500))

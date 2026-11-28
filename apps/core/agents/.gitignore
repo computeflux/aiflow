@@ -7,4 +7,3 @@
 *.env
 session/
 .venv/
-__pycache__/
